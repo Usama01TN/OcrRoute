@@ -1,0 +1,194 @@
+# Curated metadata overlay for discovered engines. Missing entries fall back to introspection.
+# cost_model: free | per_page | per_token | per_request | local     unit_price in USD cents per unit.
+
+[engines.Tesseract]
+name = "Tesseract"
+vendor = "Google / open source"
+requires_key = false
+supports_pdf = false
+supports_tables = false
+languages = ["en","fr","de","es","it","pt","nl","ar","ru","zh","ja"]
+cost_model = "local"
+quality_score = 55
+homepage = "https://github.com/tesseract-ocr/tesseract"
+[engines.Tesseract.options]
+minConfidence = { type = "number", default = 40, description = "Drop words below this confidence (0-100 or 0-1)." }
+preprocess = { type = "string", default = "auto", description = "auto | false - ensemble preprocessing with cross-variant voting." }
+
+[engines.RapidOcr]
+name = "RapidOCR"
+vendor = "RapidAI"
+requires_key = false
+languages = ["en","zh","ja","ko"]
+cost_model = "local"
+quality_score = 65
+homepage = "https://github.com/RapidAI/RapidOCR"
+
+[engines.PaddleOcr]
+name = "PaddleOCR"
+vendor = "Baidu / open source"
+requires_key = false
+supports_tables = true
+languages = ["en","zh","fr","de","ja","ko","ar","ru"]
+cost_model = "local"
+quality_score = 70
+homepage = "https://github.com/PaddlePaddle/PaddleOCR"
+
+[engines.EasyOCR]
+name = "EasyOCR"
+vendor = "Jaided AI"
+requires_key = false
+languages = ["en","fr","de","es","ar","zh","ja","ko","ru","th"]
+cost_model = "local"
+quality_score = 62
+
+[engines.SuryaOcr]
+name = "Surya"
+vendor = "Datalab"
+requires_key = false
+supports_pdf = true
+supports_tables = true
+cost_model = "local"
+quality_score = 75
+
+[engines.TrOcrHandwritten]
+name = "TrOCR (handwritten)"
+vendor = "Microsoft"
+requires_key = false
+supports_handwriting = true
+supports_overlay = false
+cost_model = "local"
+quality_score = 60
+
+[engines.GotOcr]
+name = "GOT-OCR 2.0"
+vendor = "StepFun"
+requires_key = false
+supports_tables = true
+supports_pdf = true
+cost_model = "local"
+quality_score = 78
+
+[engines.DeepSeekOcr]
+name = "DeepSeek-OCR"
+vendor = "DeepSeek"
+requires_key = false
+supports_pdf = true
+supports_tables = true
+cost_model = "local"
+quality_score = 80
+
+[engines.NougatOcr]
+name = "Nougat"
+vendor = "Meta"
+requires_key = false
+supports_pdf = true
+supports_tables = true
+supports_overlay = false
+cost_model = "local"
+quality_score = 70
+
+[engines.OcrSpace]
+name = "OCR.Space"
+vendor = "a9t9 software"
+requires_key = true
+supports_pdf = true
+supports_tables = true
+languages = ["eng","fre","ger","spa","ita","por","dut","ara","rus","chs","jpn"]
+cost_model = "per_request"
+unit_price = 0.0
+quality_score = 60
+homepage = "https://ocr.space/ocrapi"
+docs_url = "https://ocr.space/ocrapi#PostParameters"
+[engines.OcrSpace.options]
+isTable = { type = "boolean", default = true, description = "Keep table structure in line ordering." }
+detectOrientation = { type = "boolean", default = true }
+scale = { type = "boolean", default = true, description = "Upscale low-resolution images." }
+engine = { type = "integer", default = 2, description = "OCR.Space engine number (1, 2 or 3)." }
+
+[engines.GeminiOcr]
+name = "Gemini (VLM)"
+vendor = "Google"
+requires_key = true
+supports_pdf = true
+supports_handwriting = true
+supports_tables = true
+cost_model = "per_token"
+unit_price = 0.00003
+quality_score = 88
+docs_url = "https://ai.google.dev/gemini-api/docs/image-understanding"
+
+[engines.ClaudeOcr]
+name = "Claude (VLM)"
+vendor = "Anthropic"
+requires_key = true
+supports_pdf = true
+supports_handwriting = true
+supports_tables = true
+cost_model = "per_token"
+unit_price = 0.0003
+quality_score = 90
+docs_url = "https://docs.claude.com/en/docs/build-with-claude/vision"
+
+[engines.ChatGptOcr]
+name = "OpenAI (VLM)"
+vendor = "OpenAI"
+requires_key = true
+supports_handwriting = true
+supports_tables = true
+cost_model = "per_token"
+unit_price = 0.00025
+quality_score = 88
+
+[engines.MistralOcr]
+name = "Mistral OCR"
+vendor = "Mistral AI"
+requires_key = true
+supports_pdf = true
+supports_tables = true
+cost_model = "per_page"
+unit_price = 0.1
+quality_score = 85
+
+[engines.OpenRouterOcr]
+name = "OpenAI-compatible VLM (custom endpoint)"
+vendor = "Any OpenAI-compatible base URL you operate"
+requires_key = true
+supports_handwriting = true
+supports_tables = true
+cost_model = "per_token"
+quality_score = 80
+
+[engines.GroqOcr]
+name = "Groq (VLM)"
+vendor = "Groq"
+requires_key = true
+cost_model = "per_token"
+quality_score = 75
+
+[engines.GoogleOcr]
+name = "Google Cloud Vision"
+vendor = "Google Cloud"
+requires_key = true
+supports_pdf = true
+supports_handwriting = true
+cost_model = "per_page"
+unit_price = 0.15
+quality_score = 85
+
+[engines.NanonetsOcr]
+name = "Nanonets"
+vendor = "Nanonets"
+requires_key = true
+supports_pdf = true
+supports_tables = true
+cost_model = "per_page"
+quality_score = 75
+
+[engines.BaiduOcr]
+name = "Baidu OCR"
+vendor = "Baidu Cloud"
+requires_key = true
+languages = ["zh","en"]
+cost_model = "per_request"
+quality_score = 70

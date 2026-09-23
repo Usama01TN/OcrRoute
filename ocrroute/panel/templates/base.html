@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if rtl else 'ltr' }}" data-bs-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>{% block title %}{{ _(page_info[0]) }}{% endblock %} · OcrRoute</title>
+<script>(function(){try{var m=localStorage.getItem("ocrroute-theme")||"system";var e=m==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):m;document.documentElement.setAttribute("data-bs-theme",e);document.documentElement.dataset.theme=m;;window.addEventListener('DOMContentLoaded',function(){if(document.documentElement.getAttribute('data-bs-theme')==='dark'){document.querySelectorAll('link[data-favicon]').forEach(function(l){l.href='/panel/static/favicon-dark.svg';});}});}catch(e){}})();</script>
+<link rel="icon" type="image/svg+xml" href="/panel/static/favicon.svg" data-favicon>
+<link rel="icon" type="image/png" sizes="32x32" href="/panel/static/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/panel/static/apple-touch-icon.png">
+<link rel="manifest" href="/panel/static/site.webmanifest">
+<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#070B12" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/panel/static/vendor/bootstrap.min.css">
+<link rel="stylesheet" href="/panel/static/vendor/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/panel/static/panel.css">
+<script src="/panel/static/vendor/bootstrap.bundle.min.js" defer></script>
+<script src="/panel/static/vendor/htmx.min.js" defer></script>
+<script src="/panel/static/vendor/chart.umd.js" defer></script>
+<script src="/panel/static/panel.js" defer></script>
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="offcanvas offcanvas-start d-lg-none" tabindex="-1" id="sidenav"><div class="offcanvas-body p-0"><aside class="ocr-sidebar">{% include 'partials/sidebar.html' %}</aside></div></div>
+<div class="ocr-shell">
+  <aside class="ocr-sidebar d-none d-lg-flex">{% include 'partials/sidebar.html' %}</aside>
+  <div class="ocr-content">
+    <header class="ocr-topnav">
+      <button class="iconbtn d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidenav" aria-controls="sidenav" aria-label="{{ _('Menu') }}"><i class="bi bi-list"></i></button>
+      <span class="mark-sm d-none d-sm-grid"><i class="bi bi-{{ page_info[2] }}"></i></span>
+      <div class="title"><h1>{% block heading %}{{ _(page_info[0]) }}{% endblock %}</h1><p>{% block subtitle %}{{ _(page_info[1]) }}{% endblock %}</p></div>
+      <div class="tools">
+        <button class="quicknav d-none d-md-inline-flex" type="button" id="quicknav"><i class="bi bi-search"></i><span>{{ _('Quick nav') }}</span><span class="kbd">Ctrl+K</span></button>
+        <div class="dropdown langdrop">
+          {% set flags = {'en': '🇬🇧', 'fr': '🇫🇷', 'es': '🇪🇸', 'de': '🇩🇪', 'ar': '🇸🇦', 'it': '🇮🇹', 'pt': '🇧🇷', 'ru': '🇷🇺', 'zh': '🇨🇳'} %}
+          <button class="dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"><span class="flag">{{ flags.get(lang, '🌐') }}</span><span class="d-none d-sm-inline">{{ lang|upper }}</span></button>
+          <ul class="dropdown-menu dropdown-menu-end p-2">{% for code, name in languages %}<li><a class="dropdown-item d-flex align-items-center gap-2 {% if code == lang %}active{% endif %}" href="/panel/lang/{{ code }}?next={{ request.url.path }}"><span class="flag">{{ flags.get(code, '🌐') }}</span>{{ name }}</a></li>{% endfor %}</ul>
+        </div>
+        <button class="iconbtn theme-toggle" type="button" id="theme-toggle" aria-label="{{ _('Theme') }}" title="{{ _('Theme') }}"><i class="bi bi-sun sun"></i><i class="bi bi-moon moon"></i></button>
+        <a class="iconbtn ok" href="/panel/doctor" title="{{ _('Health') }}" id="health-icon"><i class="bi bi-check-circle"></i></a>
+        <form method="post" action="/panel/logout" class="m-0"><button class="iconbtn" type="submit" title="{{ _('Sign out') }}"><i class="bi bi-box-arrow-right"></i></button></form>
+      </div>
+    </header>
+    <main class="ocr-main">
+      <nav class="crumbs" aria-label="breadcrumb"><a href="/panel/">{{ _('Dashboard') }}</a><i class="bi bi-chevron-right small"></i><strong>{% block crumb %}{{ _(page_info[0]) }}{% endblock %}</strong>{% block actions_inline %}{% endblock %}<span class="ms-auto d-flex gap-2 flex-wrap">{% block actions %}{% endblock %}</span></nav>
+      {% block tabs %}{% endblock %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<div class="modal fade" id="palette" tabindex="-1" aria-label="{{ _('Quick nav') }}"><div class="modal-dialog modal-dialog-centered"><div class="modal-content p-3"><div class="input-group"><span class="input-group-text bg-transparent border-0"><i class="bi bi-search"></i></span><input class="form-control border-0" placeholder="{{ _('Quick nav') }}…" aria-label="{{ _('Go to') }}"></div><ul class="list-unstyled mt-2 mb-0 d-grid gap-1"></ul></div></div></div>
+<script>window.CSRF = "{{ csrf }}"; window.LANG = "{{ lang }}"; window.I18N = {{ {'Saved': _('Saved'), 'Copied': _('Copied'), 'Something went wrong': _('Something went wrong'), 'just now': _('just now'), 'Restart the server process': _('Restart the server process'), 'Stop the server': _('Stop the server'), 'Restart': _('Restart'), 'Restarting…': _('Restarting…'), 'Shutting down…': _('Shutting down…'), 'Server stopped': _('Server stopped'), 'Start it again with': _('Start it again with'), 'Settings saved': _('Settings saved')}|tojson }};</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block actions %}<button class="btn btn-primary btn-sm" id="new-provider"><i class="bi bi-plus-lg me-1"></i>{{ _('New provider') }}</button>{% endblock %}
+{% block content %}
+<div class="card fade-up"><div class="table-responsive"><table class="table table-hover mb-0 align-middle"><thead><tr><th>{{ _('Label') }}</th><th>{{ _('Engine') }}</th><th>{{ _('status') }}</th><th class="d-none d-lg-table-cell">{{ _('endpoint / model') }}</th><th class="d-none d-xl-table-cell">{{ _('limits') }}</th><th>{{ _('credentials') }}</th><th></th></tr></thead><tbody>
+{% for p in providers %}<tr data-id="{{ p.id }}">
+<td><strong>{{ p.label }}</strong>{% if not p.enabled %} <span class="status">off</span>{% endif %}<div class="small text-muted">prio {{ p.priority }} · w{{ p.weight }} · {{ p.timeout }}s</div></td>
+<td>{{ p.engine.name if p.engine else p.engine_id }} <span class="badge badge-soft">{{ p.engine.kind if p.engine else '' }}</span></td>
+<td><span class="status {{ p.health }}">{{ _(p.health) if p.health == 'healthy' else p.health }}</span>{% if p.circuit_open_until %}<div class="small text-muted mt-1">circuit → {{ p.circuit_open_until[11:19] }} <button class="btn btn-link btn-sm p-0 reset" data-id="{{ p.id }}">{{ _('Reset circuit') }}</button></div>{% endif %}</td>
+<td class="small d-none d-lg-table-cell">{{ p.endpoint or '-' }}<div class="text-muted">{{ p.model or '' }}</div></td>
+<td class="small num d-none d-xl-table-cell">{{ p.rpm_limit or '∞' }} rpm · {{ p.rpd_limit or '∞' }} rpd · {{ p.concurrency_limit }} conc{% if p.monthly_budget_cents %} · {{ p.monthly_budget_cents }}¢{% endif %}</td>
+<td class="small">{% for c in p.credentials %}<div class="d-flex align-items-center gap-1 flex-wrap"><code>{{ c.alias or 'key' }} …{{ secrets.decrypt(c.secret_enc)[-4:] }}</code><span class="text-muted">{{ c.success_count }}✓ {{ c.failure_count }}✗</span>{% if c.exhausted_until %}<span class="status degraded" title="{{ c.exhausted_until }}">{{ _('exhausted') }}</span>{% endif %}<button class="btn btn-link btn-sm p-0 verify" data-id="{{ c.id }}">{{ _('Verify') }}</button><button class="btn btn-link btn-sm p-0 text-danger delcred" data-id="{{ c.id }}" aria-label="{{ _('Delete') }}"><i class="bi bi-x"></i></button></div>{% endfor %}
+<button class="btn btn-outline-secondary btn-sm mt-1 addcred" data-id="{{ p.id }}"><i class="bi bi-key me-1"></i>{{ _('Add key') }}</button></td>
+<td class="text-end text-nowrap"><div class="btn-group btn-group-sm"><button class="btn btn-outline-secondary test" data-id="{{ p.id }}">{{ _('Test') }}</button><button class="btn btn-outline-secondary edit" data-id="{{ p.id }}">{{ _('Edit') }}</button><button class="btn btn-outline-danger del" data-id="{{ p.id }}"><i class="bi bi-trash"></i></button></div></td>
+</tr>{% else %}<tr><td colspan="7"><div class="empty py-4"><i class="bi bi-boxes"></i><h2>{{ _('No providers yet') }}</h2>{{ _('Nothing here yet.') }}</div></td></tr>{% endfor %}
+</tbody></table></div></div>
+
+<dialog id="prov-dlg"><h2 id="prov-title">{{ _('New provider') }}</h2>
+<form id="prov-form">
+<div class="row-fields"><div class="field"><label>{{ _('Engine') }}</label><select name="engine_id" id="engine-sel" required>{% for e in engines %}<option value="{{ e.id }}" {% if not e.available %}disabled{% endif %}>{{ e.name }} ({{ e.kind }}){% if not e.available %} - {{ _('unavailable') }}{% endif %}</option>{% endfor %}</select></div>
+<div class="field"><label>{{ _('Label') }}</label><input name="label" required placeholder="e.g. ocrspace-main"></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Custom endpoint') }} <span class="text-muted">({{ _('any OpenAI-compatible base URL you operate, or engine default') }})</span></label><input name="endpoint" placeholder="{{ _('leave empty for the engine default') }}"></div><div class="field"><label>{{ _('Model') }}</label><input name="model"></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Language') }}</label><input name="language" placeholder="en"></div><div class="field"><label>{{ _('Timeout (s)') }}</label><input name="timeout" type="number" value="60"></div><div class="field"><label>{{ _('Retries') }}</label><input name="retries" type="number" value="2"></div><div class="field"><label>{{ _('Priority') }}</label><input name="priority" type="number" value="100"></div><div class="field"><label>{{ _('Weight') }}</label><input name="weight" type="number" value="1"></div></div>
+<div class="row-fields"><div class="field"><label>RPM</label><input name="rpm_limit" type="number" value="0"></div><div class="field"><label>RPD</label><input name="rpd_limit" type="number" value="0"></div><div class="field"><label>{{ _('Concurrency') }}</label><input name="concurrency_limit" type="number" value="4"></div><div class="field"><label>{{ _('Budget ¢/month') }}</label><input name="monthly_budget_cents" type="number" step="0.01" value="0"></div></div>
+<h3 class="small text-muted text-uppercase fw-bold mt-2">{{ _('Engine options') }}</h3><div id="opt-form" class="opt-grid"></div>
+<div class="field mt-2"><label>{{ _('Options JSON') }}</label><textarea name="options_json" placeholder="{}"></textarea></div>
+<div class="field"><label>{{ _('Proxy (JSON)') }}</label><input name="proxy_json" placeholder='{"https": "http://proxy:3128"}'></div>
+<div class="field"><label>{{ _('Notes') }}</label><input name="notes"></div>
+<div class="d-flex gap-2"><button class="btn btn-primary" type="submit">{{ _('Save') }}</button><button class="btn btn-outline-secondary" type="button" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button></div>
+</form></dialog>
+<dialog id="cred-dlg"><h2>{{ _('Add credential') }}</h2><form id="cred-form"><input type="hidden" name="provider_id"><div class="field"><label>{{ _('Alias') }}</label><input name="alias" placeholder="primary"></div><div class="field"><label>{{ _('Secret (API key)') }}</label><input name="secret" type="password" required autocomplete="off"></div><div class="field"><label>{{ _('Order') }}</label><input name="order_index" type="number" value="0"></div><p class="small text-muted">{{ _('Stored encrypted; shown masked afterwards. Several keys on one provider rotate automatically on quota/auth errors.') }}</p><div class="d-flex gap-2"><button class="btn btn-primary" type="submit">{{ _('Save') }}</button><button class="btn btn-outline-secondary" type="button" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button></div></form></dialog>
+<dialog id="test-out"><h2>{{ _('Test') }}</h2><pre id="test-pre"></pre><form method="dialog" class="mt-3"><button class="btn btn-outline-secondary">{{ _('Done') }}</button></form></dialog>
+{% endblock %}
+{% block scripts %}<script>
+const ENGINE_OPTIONS = {{ engine_options|tojson }};
+const PROVIDERS = {{ providers_json|tojson }};
+document.addEventListener("DOMContentLoaded", () => {
+  const {api, toast, $, confirmDo} = OcrRoute;
+  const dlg = $("#prov-dlg"), form = $("#prov-form"), optForm = $("#opt-form"); let editing = null;
+  function buildOptions(engine, values = {}) {
+    optForm.innerHTML = "";
+    (ENGINE_OPTIONS[engine] || []).forEach(o => {
+      const wrap = document.createElement("div"); wrap.className = "field";
+      const v = values[o.name] ?? o.default ?? "";
+      let input = o.type === "boolean" ? `<select data-opt="${o.name}" data-type="boolean"><option value="">(default)</option><option value="true" ${v===true?"selected":""}>true</option><option value="false" ${v===false?"selected":""}>false</option></select>` : `<input data-opt="${o.name}" data-type="${o.type}" value="${v === null ? "" : v}" placeholder="${o.default ?? ""}">`;
+      wrap.innerHTML = `<label title="${o.description || ""}"><code>${o.name}</code> <span class="muted">${o.type}</span></label>${input}`;
+      optForm.appendChild(wrap);
+    });
+  }
+  $("#engine-sel").onchange = e => buildOptions(e.target.value);
+  function open(p) {
+    editing = p; form.reset(); $("#prov-title").textContent = p ? `Edit ${p.label}` : "New provider";
+    if (p) { for (const k of Object.keys(p)) { const el = form.elements[k]; if (el && typeof p[k] !== "object") el.value = p[k]; } form.elements.engine_id.disabled = true; form.elements.options_json.value = JSON.stringify(p.options || {}); form.elements.proxy_json.value = JSON.stringify(p.proxy || {}); buildOptions(p.engine_id, p.options || {}); }
+    else { form.elements.engine_id.disabled = false; const hash = new URLSearchParams(location.hash.slice(1)).get("new"); if (hash) form.elements.engine_id.value = hash; buildOptions(form.elements.engine_id.value); }
+    dlg.showModal();
+  }
+  $("#new-provider").onclick = () => open(null);
+  if (location.hash.startsWith("#new=")) open(null);
+  document.querySelectorAll(".edit").forEach(b => b.onclick = () => open(PROVIDERS.find(p => p.id === b.dataset.id)));
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = new FormData(form); const body = {};
+    for (const [k, v] of fd.entries()) if (!k.endsWith("_json")) body[k] = v;
+    for (const k of ["timeout","retries","priority","weight","rpm_limit","rpd_limit","concurrency_limit"]) body[k] = parseInt(body[k] || 0);
+    body.monthly_budget_cents = parseFloat(body.monthly_budget_cents || 0);
+    let options = {}; try { options = JSON.parse(fd.get("options_json") || "{}"); body.proxy = JSON.parse(fd.get("proxy_json") || "{}"); } catch { return toast("Options/proxy must be valid JSON", true); }
+    optForm.querySelectorAll("[data-opt]").forEach(el => { const v = el.value; if (v === "") return; const t = el.dataset.type; options[el.dataset.opt] = t === "boolean" ? v === "true" : t === "integer" ? parseInt(v) : t === "number" ? parseFloat(v) : v; });
+    body.options = options;
+    try { if (editing) { delete body.engine_id; await api("PATCH", `/v1/providers/${editing.id}`, body); } else await api("POST", "/v1/providers", body); location.reload(); } catch (err) { toast(err.message, true); }
+  };
+  document.querySelectorAll(".del").forEach(b => b.onclick = async () => { if (!confirmDo("Delete this provider and its credentials?")) return; try { await api("DELETE", `/v1/providers/${b.dataset.id}`); location.reload(); } catch (e) { toast(e.message, true); } });
+  document.querySelectorAll(".reset").forEach(b => b.onclick = async () => { try { await api("POST", `/v1/providers/${b.dataset.id}/reset-circuit`); location.reload(); } catch (e) { toast(e.message, true); } });
+  document.querySelectorAll(".test").forEach(b => b.onclick = async () => { b.disabled = true; try { const r = await api("POST", `/v1/providers/${b.dataset.id}/test`, null, {raw:true}); $("#test-pre").textContent = JSON.stringify({status: r.status, error: r.error_message, text: r.result && r.result.ParsedText, usage: r.usage, attempts: r.routing && r.routing.attempts}, null, 2); $("#test-out").showModal(); } catch (e) { toast(e.message, true); } finally { b.disabled = false; } });
+  const cdlg = $("#cred-dlg"), cform = $("#cred-form");
+  document.querySelectorAll(".addcred").forEach(b => b.onclick = () => { cform.reset(); cform.elements.provider_id.value = b.dataset.id; cdlg.showModal(); });
+  cform.onsubmit = async (e) => { e.preventDefault(); const fd = Object.fromEntries(new FormData(cform)); fd.order_index = parseInt(fd.order_index || 0); try { await api("POST", "/v1/credentials", fd); location.reload(); } catch (err) { toast(err.message, true); } };
+  document.querySelectorAll(".delcred").forEach(b => b.onclick = async () => { if (!confirmDo("Remove this credential?")) return; try { await api("DELETE", `/v1/credentials/${b.dataset.id}`); location.reload(); } catch (e) { toast(e.message, true); } });
+  document.querySelectorAll(".verify").forEach(b => b.onclick = async () => { b.disabled = true; try { const r = await api("POST", `/v1/credentials/${b.dataset.id}/verify`); toast(r.ok ? `Credential OK (${r.duration_ms} ms)` : `Failed: ${r.error_code} ${r.error_message || ""}`, !r.ok); } catch (e) { toast(e.message, true); } finally { b.disabled = false; } });
+});
+</script>{% endblock %}

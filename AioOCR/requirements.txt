@@ -1,0 +1,13 @@
+opencv-python
+openpyxl
+requests
+pillow
+numpy
+pytesseract
+calamari-ocr
+Keras-OCR
+paddleocr
+easyocr
+doctr
+ocr-nanonets-wrapper
+easy-paddle-ocr

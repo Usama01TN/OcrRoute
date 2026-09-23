@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block actions %}<button class="btn btn-outline-secondary btn-sm" id="import"><i class="bi bi-upload me-1"></i>{{ _('Import JSON') }}</button>{% endblock %}
+{% block content %}
+<div class="d-flex align-items-start justify-content-between gap-3 flex-wrap mb-3 fade-up">
+  <div><h2 class="fw-bold mb-1" style="font-size:1.6rem">{{ _('Routes') }}</h2><p class="text-muted mb-0">{{ _('Create OCR routes with weighted, confidence-aware routing and fallback support') }}</p></div>
+  <button class="btn btn-grad btn-lg" id="new-route"><i class="bi bi-plus-lg me-2"></i>{{ _('New route') }}</button>
+</div>
+
+<div class="card fade-up mb-3"><div class="card-body py-3">
+  <button class="w-100 border-0 bg-transparent text-start d-flex align-items-center gap-2 p-0" type="button" data-bs-toggle="collapse" data-bs-target="#catalog" aria-expanded="false" style="color:inherit">
+    <i class="bi bi-stars" style="color:var(--ocr-accent);font-size:1.3rem"></i><span class="fw-bold fs-5">{{ _('Auto-routing catalog') }}</span><span class="pill plain" style="color:var(--ocr-accent);border-color:rgba(var(--ocr-accent-rgb),.35);background:var(--ocr-accent-soft)">{{ catalog|length }} templates</span><i class="bi bi-chevron-down ms-auto"></i>
+  </button>
+  <p class="text-muted small mb-0 mt-1">{{ _('Built-in routes resolved dynamically from your providers. Use any of these IDs as the route field: no setup needed.') }}</p>
+  <div class="collapse" id="catalog"><div class="row g-2 mt-2">
+    {% for t in catalog %}<div class="col-12 col-md-6 col-xl-4"><div class="ep-box h-100 d-flex flex-column"><div class="d-flex align-items-center gap-2"><code class="fw-bold">{{ t.id }}</code><span class="badge badge-soft ms-auto">{{ t.strategy }}</span><span class="badge {{ 'text-bg-primary' if t.category == 'intelligent' else 'text-bg-secondary' }}" style="font-size:.6rem">{{ t.category }}</span></div><div class="fw-semibold mt-1">{{ t.title }}</div><div class="small text-muted flex-grow-1">{{ t.description }}</div><div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-outline-secondary copy-url" data-url="{{ t.id }}"><i class="bi bi-copy me-1"></i>{{ _('Copy') }}</button><button class="btn btn-sm btn-outline-secondary sim" data-name="{{ t.id }}"><i class="bi bi-play me-1"></i>{{ _('Simulate') }}</button></div></div></div>{% endfor %}
+  </div></div>
+</div></div>
+
+<div class="card fade-up mb-3" id="getting-started"><div class="card-body">
+  <div class="d-flex align-items-start gap-3 flex-wrap">
+    <span class="mark-sm" style="width:44px;height:44px;border-radius:12px;background:var(--ocr-accent-soft);color:var(--ocr-accent);display:grid;place-items:center;font-size:1.3rem"><i class="bi bi-lightbulb"></i></span>
+    <div><div class="fw-bold fs-5">{{ _('Getting started with routes') }}</div><div class="text-muted small">{{ _('Create routes to send OCR traffic to the right engine, with fallbacks when one fails') }}</div></div>
+    <div class="ms-auto d-flex gap-3 small"><button class="btn btn-link btn-sm p-0" id="gs-hide">{{ _('Hide') }}</button><button class="btn btn-link btn-sm p-0 text-muted" id="gs-never">{{ _('Don\'t show again') }}</button></div>
+  </div>
+  <div class="row g-2 mt-3 stagger">
+    {% for n, icon, title, text in [(1,'tag',_('Name your route'),_('A unique slug identifies it in requests and API keys')),(2,'boxes',_('Add providers'),_('Pick engines and arrange their fallback priority order')),(3,'sliders2',_('Choose a strategy'),_('How requests are distributed across providers: {n} strategies available', n=strategies|length)),(4,'check2-circle',_('Review & save'),_('Simulate with a hypothetical input, then activate the route'))] %}
+    <div class="col-12 col-md-6 col-xl-3"><div class="ep-box h-100 position-relative"><div class="d-flex align-items-center gap-2 mb-2"><span class="badge rounded-pill" style="background:var(--ocr-accent-soft);color:var(--ocr-accent)">{{ n }}</span><i class="bi bi-{{ icon }}" style="color:var(--ocr-accent);font-size:1.3rem"></i></div><div class="fw-bold">{{ title }}</div><div class="small text-muted">{{ text }}</div>{% if n < 4 %}<i class="bi bi-arrow-right position-absolute d-none d-xl-block text-muted" style="right:-14px;top:50%;transform:translateY(-50%)"></i>{% endif %}</div></div>{% endfor %}
+  </div>
+  <div class="d-flex align-items-center gap-3 mt-3"><button class="btn btn-grad" id="new-route-2"><i class="bi bi-plus-lg me-2"></i>{{ _('Create your first route') }}</button><span class="small text-muted">{{ _('or click') }} + {{ _('New route') }} {{ _('above') }}</span></div>
+</div></div>
+
+<div class="pilltabs fade-up" id="route-tabs">
+  <button class="active" data-cat="all"><i class="bi bi-diagram-3"></i>{{ _('All') }} <span class="badge badge-soft">{{ routes|length }}</span></button>
+  <button data-cat="intelligent"><i class="bi bi-stars"></i>{{ _('Intelligent') }} <span class="badge badge-soft" id="cnt-intelligent">0</span></button>
+  <button data-cat="deterministic"><i class="bi bi-list-ol"></i>{{ _('Deterministic') }} <span class="badge badge-soft" id="cnt-deterministic">0</span></button>
+</div>
+
+<div class="d-grid gap-3 stagger" id="route-cards">
+{% for r in routes %}
+<div class="card route-card" data-cat="{{ categories[r.strategy] }}" data-id="{{ r.id }}"><div class="card-body d-flex align-items-center gap-3 flex-wrap">
+  <i class="bi bi-grip-vertical text-muted d-none d-md-block" style="font-size:1.2rem;cursor:grab"></i>
+  <span style="width:40px;height:40px;border-radius:11px;background:var(--ocr-accent-soft);color:var(--ocr-accent);display:grid;place-items:center;font-size:1.2rem"><i class="bi bi-diagram-3"></i></span>
+  <div class="flex-grow-1 min-w-0">
+    <div class="d-flex align-items-center gap-2 flex-wrap"><code class="fs-6 fw-bold bg-transparent p-0">{{ r.name }}</code><span class="status ok">{{ r.strategy|upper|replace('_',' ') }}</span>{% if r.is_default %}<span class="badge badge-soft">{{ _('default route') }}</span>{% endif %}{% if not r.enabled %}<span class="status">off</span>{% endif %}</div>
+    <div class="d-flex flex-wrap gap-1 mt-2">{% for m in r.members[:3] %}<span class="badge badge-soft num">{{ m.provider.engine_id if m.provider else '?' }} · {{ m.provider.label if m.provider else '?' }}{% if m.weight != 1 %} · w{{ m.weight }}{% endif %}</span>{% endfor %}{% if r.members|length > 3 %}<span class="small text-muted align-self-center">+{{ r.members|length - 3 }} more</span>{% endif %}{% if not r.members %}<span class="small text-muted">{{ _('no members yet') }}</span>{% endif %}</div>
+    {% if r.description %}<div class="small text-muted mt-1">{{ r.description }}</div>{% endif %}
+  </div>
+  <div class="d-flex align-items-center gap-1 ms-auto">
+    <div class="form-check form-switch m-0 me-2" title="{{ _('enabled') }}"><input class="form-check-input r-enabled" type="checkbox" role="switch" data-id="{{ r.id }}" {% if r.enabled %}checked{% endif %}></div>
+    <a class="iconbtn" href="/panel/usage?group_by=route" title="{{ _('Usage & cost') }}"><i class="bi bi-graph-up"></i></a>
+    <button class="iconbtn sim" data-name="{{ r.name }}" title="{{ _('Simulate') }}"><i class="bi bi-play"></i></button>
+    <button class="iconbtn clone" data-id="{{ r.id }}" title="{{ _('Clone') }}"><i class="bi bi-copy"></i></button>
+    <button class="iconbtn export" data-id="{{ r.id }}" title="{{ _('Export') }}"><i class="bi bi-download"></i></button>
+    <button class="iconbtn edit" data-id="{{ r.id }}" title="{{ _('Edit') }}"><i class="bi bi-pencil"></i></button>
+    <button class="iconbtn del text-danger" data-id="{{ r.id }}" title="{{ _('Delete') }}"><i class="bi bi-trash"></i></button>
+  </div>
+</div></div>
+{% else %}<div class="card"><div class="card-body empty"><i class="bi bi-diagram-3"></i><h2>{{ _('Nothing here yet.') }}</h2>{{ _('Requests use the built-in auto/balanced route until you create one.') }}</div></div>{% endfor %}
+</div>
+
+<div class="card fade-up mt-3"><div class="card-header"><i class="bi bi-cpu"></i>{{ _('Simulate') }}</div><div class="card-body"><p class="small text-muted">{{ _('Resolve the candidate order for a hypothetical input. No OCR is executed.') }} <code>auto/*</code></p>
+<form id="sim-form" class="d-grid gap-2"><div class="row-fields"><div class="field"><label>{{ _('route') }}</label><input name="route" placeholder="{{ _('(auto)') }}"></div><div class="field"><label>{{ _('Strategy') }}</label><select name="strategy"><option value="">{{ _('(route\'s)') }}</option>{% for s in strategies %}<option>{{ s }}</option>{% endfor %}</select></div></div>
+<div class="row-fields"><div class="field"><label>MIME</label><select name="mime"><option>image/png</option><option>image/jpeg</option><option>application/pdf</option></select></div><div class="field"><label>{{ _('Width') }}</label><input name="width" type="number" value="1200"></div><div class="field"><label>{{ _('Height') }}</label><input name="height" type="number" value="800"></div><div class="field"><label>{{ _('pages') }}</label><input name="page_count" type="number" value="1"></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Language') }}</label><input name="language" value="en"></div><div class="field"><label>{{ _('Max cost (¢)') }}</label><input name="max_cost_cents" type="number" step="0.01"></div></div>
+<div class="d-flex gap-3 flex-wrap align-items-center"><label class="check"><input type="checkbox" name="handwriting">{{ _('handwriting') }}</label><label class="check"><input type="checkbox" name="tables">{{ _('tables') }}</label><label class="check"><input type="checkbox" name="sensitive">{{ _('sensitive') }}</label><label class="check"><input type="checkbox" name="offline">{{ _('offline') }}</label><button class="btn btn-primary btn-sm ms-auto" type="submit">{{ _('Simulate') }}</button></div></form>
+<pre id="sim-out" class="mt-3">-</pre></div></div>
+<dialog id="route-dlg"><h2 id="route-title">{{ _('New route') }}</h2><form id="route-form">
+<div class="row-fields"><div class="field"><label>{{ _('Name (slug)') }}</label><input name="name" required pattern="[a-z0-9][a-z0-9_-]{0,63}"></div><div class="field"><label>{{ _('Strategy') }}</label><select name="strategy">{% for s, d in strategies.items() %}<option value="{{ s }}" title="{{ d }}">{{ s }}</option>{% endfor %}</select></div></div>
+<div class="field"><label>{{ _('Description') }}</label><input name="description"></div>
+<div class="row-fields"><div class="field"><label>{{ _('Max attempts') }}</label><input name="max_attempts" type="number" value="5"></div><div class="field"><label>{{ _('Deadline (ms)') }}</label><input name="total_deadline_ms" type="number" value="120000"></div><div class="field"><label>{{ _('Cache TTL (s)') }}</label><input name="cache_ttl_seconds" type="number" value="3600"></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Stop: min chars') }}</label><input name="min_chars" type="number"></div><div class="field"><label>{{ _('Stop: min mean confidence (0-1)') }}</label><input name="min_mean_confidence" type="number" step="0.01"></div><label class="check mt-4"><input type="checkbox" name="require_overlay">{{ _('require overlay') }}</label></div>
+<div class="d-flex gap-3"><label class="check"><input type="checkbox" name="is_default">{{ _('default route') }}</label><label class="check"><input type="checkbox" name="enabled" checked>{{ _('enabled') }}</label></div>
+<h3 class="small text-muted text-uppercase fw-bold mt-3">{{ _('Members (drag to reorder)') }}</h3>
+<ul id="members" class="list-unstyled d-grid gap-1 mb-2"></ul>
+<div class="d-flex gap-2"><select id="add-member" class="form-select form-select-sm">{% for p in providers %}<option value="{{ p.id }}" data-label="{{ p.label }}" data-engine="{{ p.engine_id }}">{{ p.label }} - {{ p.engine_id }}</option>{% endfor %}</select><button class="btn btn-outline-secondary btn-sm text-nowrap" type="button" id="add-btn">{{ _('Add member') }}</button></div>
+<div class="d-flex gap-2 mt-3"><button class="btn btn-primary" type="submit">{{ _('Save') }}</button><button class="btn btn-outline-secondary" type="button" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button></div></form></dialog>
+{% endblock %}
+{% block scripts %}<script>
+const ROUTES = {{ routes_json|tojson }};
+document.addEventListener("DOMContentLoaded", () => {
+  const {api, toast, $, confirmDo} = OcrRoute; const dlg = $("#route-dlg"), form = $("#route-form"), ul = $("#members"); let editing = null;
+  function addMember(m) {
+    const li = document.createElement("li"); li.draggable = true; li.className = "card"; li.style.padding = "6px 10px"; li.dataset.pid = m.provider_id;
+    li.innerHTML = `<div class="row tight" style="align-items:center"><span style="cursor:grab" aria-hidden="true">⋮⋮</span><strong>${m.label}</strong><span class="muted small">${m.engine}</span><label class="small" style="margin:0">w <input class="w" type="number" value="${m.weight ?? 1}" style="width:56px"></label><label class="small" style="margin:0;display:flex;gap:4px;align-items:center"><input class="en" type="checkbox" ${m.enabled !== false ? "checked" : ""} style="width:auto">on</label><input class="cond" placeholder='condition JSON e.g. {"language_in":["ar"]}' value='${m.condition ? JSON.stringify(m.condition) : ""}' style="flex:2"><button type="button" class="sm rm">×</button></div>`;
+    li.querySelector(".rm").onclick = () => li.remove();
+    li.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", ""); li.classList.add("dragging"); });
+    li.addEventListener("dragend", () => li.classList.remove("dragging"));
+    ul.appendChild(li);
+  }
+  ul.addEventListener("dragover", e => { e.preventDefault(); const dragging = $(".dragging", ul); const after = Array.from(ul.children).find(c => c !== dragging && e.clientY < c.getBoundingClientRect().top + c.offsetHeight / 2); if (after) ul.insertBefore(dragging, after); else ul.appendChild(dragging); });
+  $("#add-btn").onclick = () => { const o = $("#add-member").selectedOptions[0]; if (o) addMember({provider_id: o.value, label: o.dataset.label, engine: o.dataset.engine, weight: 1, enabled: true}); };
+  function open(r, clone = false) {
+    editing = clone ? null : r; form.reset(); ul.innerHTML = ""; $("#route-title").textContent = r ? (clone ? `Clone ${r.name}` : `Edit ${r.name}`) : "New route";
+    if (r) { for (const k of ["name","description","strategy","max_attempts","total_deadline_ms","cache_ttl_seconds"]) form.elements[k].value = r[k]; if (clone) form.elements.name.value = r.name + "-copy"; form.elements.is_default.checked = r.is_default && !clone; form.elements.enabled.checked = r.enabled; const sc = r.stop_condition || {}; form.elements.min_chars.value = sc.min_chars ?? ""; form.elements.min_mean_confidence.value = sc.min_mean_confidence ?? ""; form.elements.require_overlay.checked = !!sc.require_overlay; r.members.forEach(addMember); }
+    form.elements.name.disabled = !!editing; dlg.showModal();
+  }
+  $("#new-route").onclick = () => open(null);
+  document.querySelectorAll(".edit").forEach(b => b.onclick = () => open(ROUTES.find(r => r.id === b.dataset.id)));
+  document.querySelectorAll(".clone").forEach(b => b.onclick = () => open(ROUTES.find(r => r.id === b.dataset.id), true));
+  document.querySelectorAll(".export").forEach(b => b.onclick = () => { const r = ROUTES.find(r => r.id === b.dataset.id); const blob = new Blob([JSON.stringify(r, null, 2)], {type: "application/json"}); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `route-${r.name}.json`; a.click(); });
+  $("#import").onclick = async () => { const inp = document.createElement("input"); inp.type = "file"; inp.accept = "application/json"; inp.onchange = async () => { try { const r = JSON.parse(await inp.files[0].text()); const exists = ROUTES.find(x => x.name === r.name); if (exists && !confirmDo(`Route '${r.name}' exists (${exists.members.length} members, ${exists.strategy}). Overwrite with imported (${r.members.length} members, ${r.strategy})?`)) return; const body = {...r, members: r.members.map((m, i) => ({provider_id: m.provider_id, order_index: i, weight: m.weight, enabled: m.enabled, condition: m.condition || {}, option_overrides: m.option_overrides || {}}))}; delete body.id; if (exists) { delete body.name; await api("PATCH", `/v1/routes/${exists.id}`, body); } else await api("POST", "/v1/routes", body); location.reload(); } catch (e) { toast(e.message, true); } }; inp.click(); };
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const f = form.elements;
+    const sc = {}; if (f.min_chars.value) sc.min_chars = parseInt(f.min_chars.value); if (f.min_mean_confidence.value) sc.min_mean_confidence = parseFloat(f.min_mean_confidence.value); if (f.require_overlay.checked) sc.require_overlay = true;
+    let members; try { members = Array.from(ul.children).map((li, i) => ({provider_id: li.dataset.pid, order_index: i, weight: parseInt(li.querySelector(".w").value || 1), enabled: li.querySelector(".en").checked, condition: li.querySelector(".cond").value ? JSON.parse(li.querySelector(".cond").value) : {}, option_overrides: {}})); } catch { return toast("Member condition must be valid JSON", true); }
+    const body = {description: f.description.value, strategy: f.strategy.value, enabled: f.enabled.checked, is_default: f.is_default.checked, stop_condition: sc, max_attempts: parseInt(f.max_attempts.value), total_deadline_ms: parseInt(f.total_deadline_ms.value), cache_ttl_seconds: parseInt(f.cache_ttl_seconds.value), members};
+    try { if (editing) await api("PATCH", `/v1/routes/${editing.id}`, body); else await api("POST", "/v1/routes", {name: f.name.value, ...body}); location.reload(); } catch (err) { toast(err.message, true); }
+  };
+  document.querySelectorAll(".del").forEach(b => b.onclick = async () => { if (!confirmDo("Delete this route?")) return; try { await api("DELETE", `/v1/routes/${b.dataset.id}`); location.reload(); } catch (e) { toast(e.message, true); } });
+  const sim = $("#sim-form");
+  document.querySelectorAll(".sim").forEach(b => b.onclick = () => { sim.elements.route.value = b.dataset.name; sim.requestSubmit(); });
+  sim.onsubmit = async (e) => { e.preventDefault(); const f = sim.elements; const body = {route: f.route.value, strategy: f.strategy.value, mime: f.mime.value, width: +f.width.value, height: +f.height.value, page_count: +f.page_count.value, language: f.language.value.split(",").map(s => s.trim()).filter(Boolean), handwriting: f.handwriting.checked, tables: f.tables.checked, sensitive: f.sensitive.checked, offline: f.offline.checked, max_cost_cents: f.max_cost_cents.value ? +f.max_cost_cents.value : null}; try { const r = await api("POST", "/v1/routes/simulate", body); $("#sim-out").textContent = r.ok ? `route: ${r.route}   strategy: ${r.strategy}\n\n` + r.candidates.map((c, i) => `${i + 1}. ${c.engine} / ${c.provider}  (${c.kind}, ~${c.est_cost_cents}¢, q${c.quality}, ${c.health})`).join("\n") + "\n\nexplain:\n" + r.explain.map(x => "  · " + x).join("\n") : `no candidate: ${r.error}`; } catch (err) { $("#sim-out").textContent = err.message; } };
+});
+
+document.addEventListener("DOMContentLoaded", () => { const {api, toast, $} = OcrRoute;
+  const cards = [...document.querySelectorAll(".route-card")];
+  ["intelligent","deterministic"].forEach(c => { const el = $("#cnt-" + c); if (el) el.textContent = cards.filter(x => x.dataset.cat === c).length; });
+  document.querySelectorAll("#route-tabs [data-cat]").forEach(b => b.onclick = () => { document.querySelectorAll("#route-tabs button").forEach(x => x.classList.toggle("active", x === b)); cards.forEach(x => x.style.display = (b.dataset.cat === "all" || x.dataset.cat === b.dataset.cat) ? "" : "none"); });
+  document.querySelectorAll(".r-enabled").forEach(cb => cb.onchange = async () => { try { await api("PATCH", `/v1/routes/${cb.dataset.id}`, {enabled: cb.checked}); toast("Saved"); } catch (e) { toast(e.message, true); cb.checked = !cb.checked; } });
+  document.querySelectorAll(".copy-url").forEach(b => b.onclick = () => navigator.clipboard.writeText(b.dataset.url).then(() => toast("Copied")));
+  const gs = $("#getting-started"); try { if (localStorage.getItem("ocrroute-routes-gs") === "never" || (cards.length && sessionStorage.getItem("ocrroute-routes-gs") === "hide")) gs.remove(); } catch {}
+  const hide = $("#gs-hide"), never = $("#gs-never"); if (hide) hide.onclick = () => { gs.remove(); try { sessionStorage.setItem("ocrroute-routes-gs", "hide"); } catch {} }; if (never) never.onclick = () => { gs.remove(); try { localStorage.setItem("ocrroute-routes-gs", "never"); } catch {} };
+  const nr2 = $("#new-route-2"); if (nr2) nr2.onclick = () => $("#new-route").click();
+});
+</script>{% endblock %}

@@ -1,0 +1,14 @@
+services:
+  ocrroute:
+    build: .
+    ports:
+      - "20256:20256"
+    volumes:
+      - ocrroute-data:/data
+    environment:
+      OCRROUTE_LOG_LEVEL: INFO
+      OCRROUTE_JSON_LOGS: "true"
+      # OCRROUTE_SECRET_KEY: change-me   # optional: stable Fernet key across containers
+    restart: unless-stopped
+volumes:
+  ocrroute-data:

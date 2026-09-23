@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block actions %}
+<form method="get"><select class="form-select form-select-sm" name="hours" onchange="this.form.submit()" aria-label="{{ _('Time range') }}">
+{% for h,l in [(1,'1 hour'),(24,'24 hours'),(168,'7 days'),(720,'30 days')] %}<option value="{{h}}" {% if hours==h %}selected{% endif %}>{{ _(l) }}</option>{% endfor %}</select></form>
+{% endblock %}
+{% block content %}
+<p class="greet">{{ _('Welcome back, {name}.', name=user) }} <span class="text-muted">{% if not alerts %}{{ _('Everything looks healthy.') }}{% endif %}</span></p>
+{% if onboarding and onboarding|selectattr(1, 'equalto', false)|list %}
+<div class="card onboarding mb-3"><div class="card-header"><i class="bi bi-flag"></i>{{ _('Getting started') }}</div><div class="card-body"><ol>
+{% for label, done, href in onboarding %}<li class="{{ 'done' if done else '' }}"><span class="tick">{{ '✓' if done else loop.index }}</span>{% if done %}<span>{{ _(label) }}</span>{% else %}<a href="{{ href }}">{{ _(label) }}</a>{% endif %}</li>{% endfor %}
+</ol></div></div>
+{% elif onboarding %}<div class="alert alert-success py-2"><i class="bi bi-check2-circle me-1"></i>{{ _('All set - OcrRoute is ready to route.') }}</div>{% endif %}
+{% for a in alerts %}<div class="alert alert-warning py-2"><i class="bi bi-exclamation-triangle me-1"></i>{{ a }}</div>{% endfor %}
+<div class="row g-3 stagger">
+  <div class="col-6 col-xl-3"><div class="card kpi h-100"><div class="card-body d-flex justify-content-between"><div><div class="v">{{ summary.runs }}</div><div class="l">{{ _('runs') }} · {{ summary.success_rate }}% {{ _('succeeded') }}</div></div><i class="bi bi-lightning-charge"></i></div></div></div>
+  <div class="col-6 col-xl-3"><div class="card kpi h-100"><div class="card-body d-flex justify-content-between"><div><div class="v">{{ summary.p50_ms }} <span class="text-muted fs-6">/ {{ summary.p95_ms }} ms</span></div><div class="l">{{ _('p50 / p95 latency') }}</div></div><i class="bi bi-stopwatch"></i></div></div></div>
+  <div class="col-6 col-xl-3"><div class="card kpi h-100"><div class="card-body d-flex justify-content-between"><div><div class="v">{{ summary.pages }}</div><div class="l">{{ _('pages') }} · {{ _('cache hits') }} {{ summary.cache_hit_rate }}%</div></div><i class="bi bi-files"></i></div></div></div>
+  <div class="col-6 col-xl-3"><div class="card kpi h-100"><div class="card-body d-flex justify-content-between"><div><div class="v">${{ '%.4f'|format(summary.cost_cents/100) }}</div><div class="l">{{ _('estimated spend') }} · {{ _('month to date') }} ${{ '%.3f'|format(summary.month_cost_cents/100) }}</div></div><i class="bi bi-cash-coin"></i></div></div></div>
+</div>
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header"><i class="bi bi-bar-chart"></i>{{ _('Runs by day') }}</div><div class="card-body"><div class="chart"><canvas id="c-daily"></canvas></div></div></div></div>
+  <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header"><i class="bi bi-cpu"></i>{{ _('Attempts by engine (window)') }}</div><div class="card-body"><div class="chart"><canvas id="c-engines"></canvas></div></div></div></div>
+  <div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header"><i class="bi bi-heart-pulse"></i>{{ _('Provider health') }}</div><div class="card-body">
+    <div class="d-flex flex-wrap gap-2">{% for p in providers %}<span class="pill {{ 'ok' if p.health=='healthy' else ('bad' if p.health=='down' else 'warn') }}" title="{{ p.engine_id }}">{{ p.label }}</span>{% else %}<span class="text-muted">{{ _('No providers yet') }} - <a href="/panel/providers">{{ _('add one') }}</a>.</span>{% endfor %}</div>
+    <p class="small text-muted mt-3 mb-0">{{ summary.healthy_providers }}/{{ summary.total_providers }} {{ _('healthy') }} · queue {{ summary.queue_depth }} · cache {{ summary.cache_entries }}</p>
+  </div></div></div>
+</div>
+<div class="row g-3 mt-1">
+  <div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header"><i class="bi bi-activity"></i>{{ _('Live run feed') }}</div><div class="card-body"><ul class="feed" id="feed">{% for r in recent %}<li><span class="text-muted small" title="{{ r.created_at }}">{{ rel(r.created_at) }}</span><a href="/panel/runs/{{ r.id }}">{{ r.route_name or '-' }} · {{ r.winning_engine or '-' }}</a><span class="num">{{ r.duration_ms }} ms</span><span class="status {{ r.status }}">{{ _(r.status) }}</span></li>{% else %}<li class="text-muted">{{ _('Nothing here yet.') }}</li>{% endfor %}</ul></div></div></div>
+  <div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header"><i class="bi bi-table"></i>{{ _('Engines in window') }}</div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>{{ _('engine') }}</th><th class="text-end">{{ _('attempts') }}</th><th class="text-end">{{ _('succeeded') }}</th><th class="text-end">{{ _('avg') }}</th><th class="text-end">{{ _('cost') }}</th></tr></thead><tbody>
+  {% for e in engines %}<tr><td>{{ e.engine }}</td><td class="text-end num">{{ e.attempts }}</td><td class="text-end num">{{ e.success_rate }}%</td><td class="text-end num">{{ e.avg_ms }} ms</td><td class="text-end num">${{ '%.4f'|format(e.cost_cents/100) }}</td></tr>{% else %}<tr><td colspan="5" class="text-muted">{{ _('No attempts in this window.') }}</td></tr>{% endfor %}</tbody></table></div></div></div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const daily = {{ daily|tojson }}, eng = {{ engines|tojson }};
+  OcrRoute.chart(document.getElementById("c-daily"), "bar", daily.map(d=>d.day.slice(5)), [
+    {label:"succeeded", data: daily.map(d=>d.succeeded)}, {label:"cached", data: daily.map(d=>d.cached)}, {label:"failed", data: daily.map(d=>d.failed)}],
+    {scales:{x:{stacked:true, grid:{display:false}}, y:{stacked:true, beginAtZero:true}}});
+  OcrRoute.chart(document.getElementById("c-engines"), "bar", eng.map(e=>e.engine), [{label:"attempts", data: eng.map(e=>e.attempts)}]);
+  OcrRoute.liveFeed(document.getElementById("feed"));
+});
+</script>{% endblock %}

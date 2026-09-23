@@ -1,0 +1,112 @@
+name: build-executables
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      onefile:
+        description: "Build single-file executables"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x86_64
+          - os: windows-2022
+            label: windows-x86_64
+          - os: macos-14
+            label: macos-arm64
+          - os: macos-13
+            label: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: System packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0
+      - name: System packages (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract || true
+      - name: System packages (Windows)
+        if: runner.os == 'Windows'
+        run: choco install tesseract --no-progress -y || echo "tesseract optional"
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[local,desktop,dev]" pyinstaller
+      - name: Smoke test
+        env: { QT_QPA_PLATFORM: offscreen }
+        run: pytest -q tests/unit
+      - name: Build executables
+        run: python scripts/build_executable.py --target all --clean ${{ inputs.onefile && '--onefile' || '' }}
+      - name: Verify server binary
+        shell: bash
+        run: |
+          BIN=$(ls dist/ocrroute-server/ocrroute-server* 2>/dev/null | head -1 || ls dist/ocrroute-server* | head -1)
+          "$BIN" version --json
+          "$BIN" engines list --json | head -c 400; echo
+      - name: Upload artifacts
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocrroute-${{ matrix.label }}
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+      - name: Artifact link in job summary
+        shell: bash
+        run: |
+          {
+            echo "### 📦 ${{ matrix.label }}"
+            echo ""
+            echo "| file | size |"
+            echo "|---|---|"
+            for f in dist/*.zip dist/*.tar.gz; do [ -f "$f" ] && echo "| $(basename "$f") | $(du -h "$f" | cut -f1) |"; done
+            echo ""
+            echo "Download: ${{ steps.upload.outputs.artifact-url }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Checksums
+        run: cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: GitHub Release with executables
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          body: |
+            Stand-alone executables built by CI for Windows, macOS (Intel & Apple silicon) and Linux.
+            `ocrroute-server-*` = CLI + API + web control panel (double-click starts the server on http://127.0.0.1:20256).
+            `ocrroute-desktop-*` = PyQt5 desktop app with the embedded server.
+            Binaries are unsigned: macOS Gatekeeper / Windows SmartScreen may warn on first launch.
+      - name: Release links in summary
+        run: |
+          echo "### 🚀 Release ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          for f in release/*; do echo "- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"; done

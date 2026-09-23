@@ -1,0 +1,1 @@
+{"name":"OcrRoute","short_name":"OcrRoute","icons":[{"src":"/panel/static/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/panel/static/icon-512.png","sizes":"512x512","type":"image/png"}],"theme_color":"#2563EB","background_color":"#070B12","display":"standalone","start_url":"/panel/"}

@@ -1,0 +1,19 @@
+<a class="ocr-brand" href="/panel/"><span class="mark"><i class="bi bi-braces-asterisk"></i></span><span><div class="t">OcrRoute</div><div class="v">v{{ version }}</div></span></a>
+<div class="ocr-search"><i class="bi bi-search"></i><input class="form-control form-control-sm global-search" type="search" placeholder="{{ _('Search engine, vendor…')|replace('engine, vendor…', '') }}…" aria-label="{{ _('Search') }}" data-nav-filter></div>
+{% for gkey, glabel, items in nav_groups %}
+<div class="ocr-group" data-group="{{ gkey }}">
+  <button type="button" aria-expanded="true"><span>{{ _(glabel) }}</span><i class="bi bi-chevron-down"></i></button>
+  <div class="items">
+  {% for key, label, sub, href, icon in items %}
+    <a href="{{ href }}" class="ocr-nav-item {% if page == key %}active{% endif %}" data-label="{{ _(label)|lower }} {{ _(sub)|lower }}"><i class="bi bi-{{ icon }}"></i><span class="d-grid"><span class="t">{{ _(label) }}</span><span class="s">{{ _(sub) }}</span></span>{% if key == 'tools' %}<span class="tag">{{ _('reserved') }}</span>{% endif %}</a>
+  {% endfor %}
+  </div>
+</div>
+{% endfor %}
+<div class="ocr-sidefoot">
+  <div class="d-flex gap-2 flex-wrap"><span class="sync"><i class="bi bi-cpu"></i><span data-engines-ready>{{ _('Engines ready') }}</span></span><a class="sync text-decoration-none" href="/v1/docs" target="_blank" rel="noopener"><i class="bi bi-journal-code"></i>API docs</a></div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-restart" data-action="restart" title="{{ _('Restart the server process') }}"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Restart') }}</button>
+    <button class="btn btn-sm btn-shutdown" data-action="shutdown" title="{{ _('Stop the server') }}"><i class="bi bi-power me-1"></i>{{ _('Shutdown') }}</button>
+  </div>
+</div>

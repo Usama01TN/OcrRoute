@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocrroute"
+version = "0.4.2"
+description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "OcrRoute contributors" }]
+keywords = ["ocr", "gateway", "routing", "fastapi", "pyqt5", "sqlite"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Framework :: FastAPI",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+dependencies = [
+  "fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.5", "pydantic-settings>=2.1",
+  "sqlalchemy>=2.0", "alembic>=1.13", "typer>=0.9", "rich>=13", "structlog>=24",
+  "cryptography>=42", "python-multipart>=0.0.9", "jinja2>=3.1", "itsdangerous>=2.1",
+  "argon2-cffi>=23", "httpx>=0.26", "requests>=2.31", "pillow>=10", "numpy>=1.24",
+  "openpyxl>=3.1", "prometheus-client>=0.19", "pypdfium2>=4.20",
+]
+
+[project.optional-dependencies]
+api = ["requests>=2.31"]
+local = ["pytesseract>=0.3.10", "opencv-python-headless>=4.8"]
+vlm = ["torch", "transformers>=4.40", "accelerate"]
+desktop = ["PyQt5>=5.15", "keyring>=24"]
+all = ["ocrroute[api,local,vlm,desktop]"]
+dev = ["pytest>=8", "pytest-cov", "respx>=0.20", "ruff", "black", "mypy", "types-requests"]
+
+[project.scripts]
+ocrroute = "ocrroute.cli.main:app"
+
+[tool.setuptools.packages.find]
+include = ["ocrroute*", "AioOCR*"]
+
+[tool.setuptools.package-data]
+AioOCR = ["requirements.txt"]
+ocrroute = ["catalog/*.toml", "i18n/*.json", "panel/templates/*.html", "panel/templates/**/*.html", "panel/static/*", "panel/static/**/*", "desktop/styles/*.qss", "tools/README.md"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["AioOCR"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B008", "B904", "UP007"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+exclude = ["AioOCR", "tests"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

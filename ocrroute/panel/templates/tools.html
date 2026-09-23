@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+{% if tools %}<div class="card table-responsive"><table class="table mb-0"><thead><tr><th>{{ _('tool') }}</th><th>{{ _('version') }}</th><th>{{ _('description') }}</th></tr></thead><tbody>{% for t in tools %}<tr><td><code>{{ t.name }}</code></td><td>{{ t.version }}</td><td>{{ t.description }}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}
+<div class="card"><div class="card-body empty">
+  <i class="bi bi-tools"></i>
+  <h2>{{ _('Tools') }}</h2>
+  <p>{{ _('No tools are installed. This section is reserved for future post-processing extensions.') }}</p>
+  <button class="btn btn-outline-secondary" disabled title="{{ _('Not available in this release') }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Add tool') }}</button>
+  <p class="small mt-3 mb-0"><code>docs/TOOLS.md</code> {{ _('describes the contract a future tool must follow.') }}</p>
+</div></div>
+{% endif %}
+{% endblock %}
