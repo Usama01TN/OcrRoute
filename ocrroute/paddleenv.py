@@ -10,13 +10,15 @@ Applied before PaddleX is imported (it reads these variables at import time). Ex
   model exports, which Paddle 3.0 cannot load ("Type of attribute: strides is not right"); BOS serves the exports
   made for Paddle 3.0.
 - ``PADDLE_PDX_LOCAL_FONT_FILE_PATH``: PaddleX 3.0 downloads two fonts *at import time* (used only to draw
-  visualisations). Offline, that made the engine unavailable; during a build it made PyInstaller's module scan of
-  PaddleX fail, so PaddleX's own imports (``colorlog``...) were never bundled. A system font is used instead.
+  visualisations), and Paddle's server now answers 403 for that URL on every network, so ``import paddleocr``
+  failed. OcrRoute ships DejaVu Sans (``ocrroute/assets/fonts``, Bitstream Vera license) and points PaddleX at it;
+  system fonts are only a fallback, so the font never depends on the operating system.
 """
 from __future__ import absolute_import, division, print_function
 
 import os
 
+BUNDLED_FONT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'fonts', 'DejaVuSans.ttf')
 SYSTEM_FONTS = (
     '/System/Library/Fonts/Supplemental/Arial Unicode.ttf', '/System/Library/Fonts/Supplemental/Arial.ttf',
     '/Library/Fonts/Arial Unicode.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -39,9 +41,9 @@ def paddleVersion():
 
 def systemFont():
     """
-    :return: str | None  a TrueType font the operating system ships
+    :return: str | None  the bundled DejaVu Sans, else a TrueType font the operating system ships
     """
-    for font in SYSTEM_FONTS:
+    for font in (BUNDLED_FONT,) + SYSTEM_FONTS:
         if os.path.isfile(font):
             return font
     return None
@@ -69,4 +71,4 @@ def apply(environ=None):
     return applied
 
 
-__all__ = ['SYSTEM_FONTS', 'apply', 'paddleVersion', 'systemFont']
+__all__ = ['BUNDLED_FONT', 'SYSTEM_FONTS', 'apply', 'paddleVersion', 'systemFont']

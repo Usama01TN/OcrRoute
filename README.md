@@ -97,6 +97,11 @@ with its own namespace (`ocrroute`, `~/.ocrroute`, `OCRROUTE_*`), its own defaul
 refuses to bind 20128), and no chat/completions, LLM proxying or agent-protocol surface. It is not a fork,
 plugin or companion of any other gateway.
 
+## Third-party assets
+
+`ocrroute/assets/fonts/DejaVuSans.ttf` is DejaVu Sans (Bitstream Vera license; see `LICENSE-DejaVu.txt` next to it),
+used by PaddleOCR for visualisations.
+
 ## License
 
 MIT - see `LICENSE`. The `AioOCR/` library is included as given and keeps its original authorship.

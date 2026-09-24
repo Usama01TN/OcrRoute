@@ -158,3 +158,17 @@ def test_declared_dependencies_follow_requirements():
     deps = b.declaredDependencies('fastapi')
     assert 'starlette' in deps and 'pydantic' in deps  # declared, installed, followed recursively
     assert b.declaredDependencies('distribution-that-does-not-exist-xyz') == []
+
+
+def test_bundled_font_is_used_first_and_ships_its_license():
+    """PaddleX 3.0 downloads a font at import from a URL that answers 403 everywhere; OcrRoute ships its own."""
+    import os
+
+    from ocrroute import paddleenv
+
+    assert os.path.isfile(paddleenv.BUNDLED_FONT) and os.path.getsize(paddleenv.BUNDLED_FONT) > 100000
+    assert paddleenv.systemFont() == paddleenv.BUNDLED_FONT  # deterministic on every OS
+    assert os.path.isfile(os.path.join(os.path.dirname(paddleenv.BUNDLED_FONT), 'LICENSE-DejaVu.txt'))
+    env = {}
+    paddleenv.apply(env)
+    assert env['PADDLE_PDX_LOCAL_FONT_FILE_PATH'] == paddleenv.BUNDLED_FONT

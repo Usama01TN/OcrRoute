@@ -49,6 +49,7 @@ def dataArgs():
     pairs = [
         ('ocrroute/catalog/engines.toml', 'ocrroute/catalog'),
         ('ocrroute/i18n', 'ocrroute/i18n'),
+        ('ocrroute/assets', 'ocrroute/assets'),
         ('ocrroute/panel/templates', 'ocrroute/panel/templates'),
         ('ocrroute/panel/static', 'ocrroute/panel/static'),
         ('ocrroute/desktop/styles', 'ocrroute/desktop/styles'),

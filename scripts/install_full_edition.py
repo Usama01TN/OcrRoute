@@ -15,6 +15,7 @@ Why a script: the two engines need care to coexist with the rest of OcrRoute.
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import os
 import platform
 import subprocess
 import sys
@@ -75,7 +76,15 @@ def main():
         probe.append('import easyocr, torch; print("easyocr", easyocr.__version__, "torch", torch.__version__)')
     if withPaddle:
         probe.append('import paddle, paddleocr; print("paddle", paddle.__version__)')
-    subprocess.check_call([sys.executable, '-c', '; '.join(probe)])
+    # The check imports PaddleX in a fresh interpreter, so it needs OcrRoute's Paddle settings too: PaddleX 3.0
+    # downloads a font at import time from a URL that now answers 403 everywhere.
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, root)
+    from ocrroute import paddleenv
+
+    env = dict(os.environ)
+    print('Paddle settings for the check:', paddleenv.apply(env), flush=True)
+    subprocess.check_call([sys.executable, '-c', '; '.join(probe)], env=env)
     with open('full-edition.txt', 'w') as fh:
         fh.write('easyocr={} paddleocr={}\n'.format(int(withEasy), int(withPaddle)))
     return 0

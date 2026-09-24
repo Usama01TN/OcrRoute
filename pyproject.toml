@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
-version = "0.5.4"
+version = "0.5.5"
 description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
 readme = "README.md"
 license = { text = "MIT" }
@@ -52,7 +52,7 @@ include = ["ocrroute*", "AioOCR*"]
 
 [tool.setuptools.package-data]
 AioOCR = ["requirements.txt"]
-ocrroute = ["catalog/*.toml", "i18n/*.json", "panel/templates/*.html", "panel/templates/**/*.html", "panel/static/*", "panel/static/**/*", "desktop/styles/*.qss", "tools/README.md"]
+ocrroute = ["catalog/*.toml", "i18n/*.json", "assets/fonts/*", "panel/templates/*.html", "panel/templates/**/*.html", "panel/static/*", "panel/static/**/*", "desktop/styles/*.qss", "tools/README.md"]
 
 [tool.ruff]
 line-length = 120

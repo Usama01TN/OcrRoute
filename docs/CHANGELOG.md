@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.5 - 2026-09-24
+
+- **Fix (Full edition install on macOS x86_64)**: `install_full_edition.py` failed at its final `import paddleocr`
+  check with `403 Forbidden` for `.../PaddleX3.0/fonts/PingFang-SC-Regular.ttf`. PaddleX 3.0 downloads that font at
+  import time, and Paddle's server now refuses the URL on every network (GitHub's runners included), not just
+  offline. The check ran in a fresh interpreter without OcrRoute's Paddle settings; it now gets them.
+- **Bundled font**: OcrRoute ships DejaVu Sans (`ocrroute/assets/fonts`, Bitstream Vera license, license text
+  included) and points PaddleX at it first, so the font is identical on every OS and never downloaded. It is part of
+  the pip package and of both executable editions.
+
 ## 0.5.4 - 2026-09-24
 
 - **Fix (Full edition, PaddleOCR on macOS x86_64)**: `Type of attribute: strides is not right` when loading models.
