@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.6 - 2026-09-24
+
+- **Fix (Full edition, PaddleOCR on macOS x86_64)**: model downloads failed with `403 Forbidden` for
+  `.../official_inference_model/paddle3.0.0/...`. Paddle's own model server (BOS) now refuses those Paddle-3.0 exports
+  on every network, including GitHub's runners (0.5.4 wrongly routed Intel Macs to it). Paddle 3.0 now downloads from
+  Hugging Face, whose PP-OCRv5 and auxiliary models were published for Paddle 3.0.
+- **PaddleX 3.0.3 patches, applied when it is imported** (`ocrroute.paddleenv.installPaddleXPatches`, an import hook, so
+  every process gets them): `PP-LCNet_x1_0_textline_ori` and other pipeline models are added to its Hugging Face
+  list (they fell back to the dead server), and its 1-second "is Hugging Face reachable?" probe is replaced by a
+  tolerant 10-second check. Newer PaddleX versions are left untouched.
+- Self-test adds `paddleocr:model-sources`: in a Paddle 3.0 bundle, every OCR-pipeline model must resolve to
+  Hugging Face.
+
 ## 0.5.5 - 2026-09-24
 
 - **Fix (Full edition install on macOS x86_64)**: `install_full_edition.py` failed at its final `import paddleocr`

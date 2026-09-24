@@ -50,7 +50,23 @@ def _paddleOcrRequirements():
         raise RuntimeError('PaddleX OCR requirements not met in the bundle; missing metadata: {}'.format(missing))
 
 
-CHECKS = {'paddleocr:requirements': _paddleOcrRequirements, 'paddle:compute': _paddleCompute, 'torch:compute': _torchCompute, 'torchvision:ops': _torchvisionOps}
+def _paddleModelSources():
+    """PaddleX 3.0.x (Intel Macs) must download every OCR-pipeline model from Hugging Face: Paddle's own server
+    answers 403 for its paddle3.0.0 exports. Verifies OcrRoute's import-time patch took effect inside the bundle."""
+    from importlib.metadata import version
+
+    import paddlex.inference.utils.official_models as om
+
+    if not version('paddlex').startswith('3.0.'):
+        return
+    from ocrroute import paddleenv
+
+    missing = [m for m in paddleenv.HF_MODELS_MISSING_IN_PADDLEX_30 if m not in om.HUGGINGFACE_MODELS]
+    if missing or not getattr(om, '_ocrroutePatched', False):
+        raise RuntimeError('PaddleX 3.0 model sources not patched (would use the dead BOS server for {})'.format(missing))
+
+
+CHECKS = {'paddleocr:model-sources': _paddleModelSources, 'paddleocr:requirements': _paddleOcrRequirements, 'paddle:compute': _paddleCompute, 'torch:compute': _torchCompute, 'torchvision:ops': _torchvisionOps}
 
 
 def run(modules):

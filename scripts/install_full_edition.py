@@ -71,7 +71,9 @@ def main():
     # exactly one OpenCV, headless, at the version PaddleX pins
     pip('uninstall', '-y', 'opencv-python', 'opencv-python-headless', 'opencv-contrib-python', 'opencv-contrib-python-headless')
     pip('install', '--prefer-binary', OPENCV, NUMPY)
-    probe = ['import cv2, numpy; print("cv2", cv2.__version__, "numpy", numpy.__version__)']
+    probe = ['import sys; sys.path.insert(0, {!r}); from ocrroute import paddleenv; paddleenv.apply()'.format(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+             'import cv2, numpy; print("cv2", cv2.__version__, "numpy", numpy.__version__)']
     if withEasy:
         probe.append('import easyocr, torch; print("easyocr", easyocr.__version__, "torch", torch.__version__)')
     if withPaddle:

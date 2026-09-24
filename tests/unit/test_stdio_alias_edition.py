@@ -137,7 +137,7 @@ def test_paddle_environment_defaults(monkeypatch):
     env = {}
     paddleenv.apply(env)
     assert env['PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT'] == 'False'
-    assert env['PADDLE_PDX_MODEL_SOURCE'] == 'BOS'  # Paddle 3.0 cannot load the latest (Hugging Face) exports
+    assert env['PADDLE_PDX_MODEL_SOURCE'] == 'huggingface'  # BOS answers 403 for the Paddle-3.0 exports
     monkeypatch.setattr(paddleenv, 'paddleVersion', lambda: (3, 3))
     env = {}
     paddleenv.apply(env)
@@ -172,3 +172,26 @@ def test_bundled_font_is_used_first_and_ships_its_license():
     env = {}
     paddleenv.apply(env)
     assert env['PADDLE_PDX_LOCAL_FONT_FILE_PATH'] == paddleenv.BUNDLED_FONT
+
+
+def test_paddlex30_model_sources_patch(monkeypatch):
+    """BOS answers 403 for Paddle-3.0 exports; PaddleX 3.0.3 must use Hugging Face for every OCR-pipeline model."""
+    import types
+    from importlib import metadata
+
+    from ocrroute import paddleenv
+
+    fake = types.ModuleType('official_models')
+    fake.HUGGINGFACE_MODELS = ['PP-OCRv5_server_det', 'UVDoc']
+    fake.is_huggingface_accessible = lambda: False
+    monkeypatch.setattr(metadata, 'version', lambda name: '3.7.2')
+    assert paddleenv.patchOfficialModels(fake) is False  # newer PaddleX is left alone
+    monkeypatch.setattr(metadata, 'version', lambda name: '3.0.3')
+    assert paddleenv.patchOfficialModels(fake) is True
+    assert 'PP-LCNet_x1_0_textline_ori' in fake.HUGGINGFACE_MODELS
+    assert fake.is_huggingface_accessible is paddleenv.huggingFaceReachable
+    assert paddleenv.patchOfficialModels(fake) is False  # idempotent
+    monkeypatch.setattr(paddleenv, 'paddleVersion', lambda: (3, 0))
+    env = {}
+    paddleenv.apply(env)
+    assert env['PADDLE_PDX_MODEL_SOURCE'] == 'huggingface'  # never the dead BOS server

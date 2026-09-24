@@ -289,6 +289,7 @@ def selftest(binary):
         engines = json.load(fh).get('bundled_extra_engines', [])
     modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy', 'torch:compute', 'torchvision:ops'],
                'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib', 'paddleocr:requirements',
+                             'paddleocr:model-sources',
                              'paddle:compute']}
     wanted = [m for e in engines for m in modules.get(e, [])]
     if not wanted:
