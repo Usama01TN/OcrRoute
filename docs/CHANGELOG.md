@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.4 - 2026-09-23
+
+- **Fix (desktop)**: background results could be lost. `runAsync()` handed workers to Qt's thread pool without
+  keeping a Python reference, so the garbage collector could destroy a worker's signal object mid-run and the
+  scan / refresh / save never completed. Workers are now held until their `finished` signal is delivered
+  (regression test runs 40 workers under forced garbage collection).
+- **Fix (tests)**: the desktop scan test left its first polling timer running; through a late-binding closure it
+  quit the next event loop early, so on fast machines (Windows CI) the responsiveness probe had no samples and
+  `max()` of an empty list raised. Pollers are stopped and bound explicitly, the probe uses a precise timer with a
+  minimum observation window, and it asserts it collected enough samples.
+- Starlette's httpx deprecation warning is filtered in pytest.
+
 ## 0.4.3 - 2026-09-23
 
 - **CI lint passes**: ruff's pyupgrade rules that contradict the project's Python 2/3-compatible style (`(object)`,

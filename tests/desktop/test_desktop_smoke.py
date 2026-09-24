@@ -100,26 +100,74 @@ def test_scan_page_runs_against_fake_engine(qapp, ctx, sample_png):
         loop = QEventLoop()
         QTimer.singleShot(10000, loop.quit)
         tm = QTimer()
-        tm.timeout.connect(lambda: loop.quit() if page.target.count() > 1 else None)
+        tm.timeout.connect(lambda lp=loop: lp.quit() if page.target.count() > 1 else None)  # bind this loop
         tm.start(50)
         loop.exec_()
+        tm.stop()  # a leftover poller would otherwise quit the next event loop early
         assert page.target.findData('engine:FakeOcr') >= 0, toasts
         page.set_input(sample_png, 't.png') if hasattr(page, 'set_input') else page.setInput(sample_png, 't.png')
         page.target.setCurrentIndex(page.target.findData('engine:FakeOcr'))
+        # GUI responsiveness probe: a precise 10 ms timer must keep firing while the scan runs in the worker pool.
+        # The loop stays open for at least MIN_WINDOW seconds so fast machines (e.g. Windows CI) still collect
+        # enough samples; Qt.PreciseTimer avoids Windows' default ~15.6 ms coarse timer resolution.
+        from PyQt5.QtCore import Qt
+
+        MIN_WINDOW = 0.4
         ticks = []
         tick = QTimer()
+        tick.setTimerType(Qt.PreciseTimer)
         tick.timeout.connect(lambda: ticks.append(time.monotonic()))
-        tick.start(20)
+        tick.start(10)
+        started = time.monotonic()
         page.run()
         loop = QEventLoop()
         QTimer.singleShot(30000, loop.quit)
         tm2 = QTimer()
-        tm2.timeout.connect(lambda: loop.quit() if page.envelope else None)
-        tm2.start(50)
+        tm2.timeout.connect(lambda lp=loop: lp.quit() if page.envelope and time.monotonic() - started >= MIN_WINDOW else None)
+        tm2.start(25)
         loop.exec_()
+        tm2.stop()
+        tick.stop()
         assert page.envelope and page.envelope['status'] == 'succeeded', toasts
         assert page.text.toPlainText().startswith('hello world') and page.lines.rowCount() == 2
+        assert len(ticks) >= 5, 'responsiveness probe collected only {} samples'.format(len(ticks))
         gaps = [b - a for a, b in zip(ticks, ticks[1:])]
-        assert max(gaps) < 0.25, 'GUI thread blocked for {:.0f} ms'.format(max(gaps) * 1000)
+        worst = max(gaps)
+        assert worst < 0.25, 'GUI thread blocked for {:.0f} ms'.format(worst * 1000)
+        from ocrroute.desktop.workers import liveCount
+
+        loop = QEventLoop()
+        QTimer.singleShot(300, loop.quit)
+        loop.exec_()
+        assert liveCount() == 0, 'workers leaked: {}'.format(liveCount())
     finally:
         server.should_exit = True
+
+
+def test_worker_results_survive_garbage_collection(qapp):
+    """Regression: an unreferenced Worker's signal object used to be collected mid-run, dropping the result."""
+    import gc
+    import time
+
+    from PyQt5.QtCore import QEventLoop, QTimer
+
+    from ocrroute.desktop.workers import liveCount, runAsync
+
+    got = []
+    for i in range(40):
+        runAsync(lambda i=i: (time.sleep(0.02), i)[1], got.append)  # no reference kept by the caller
+    collector = QTimer()
+    collector.timeout.connect(gc.collect)  # force collections while the workers run
+    collector.start(1)
+    loop = QEventLoop()
+    done = QTimer()
+    done.timeout.connect(lambda: loop.quit() if len(got) == 40 else None)
+    done.start(10)
+    QTimer.singleShot(15000, loop.quit)
+    loop.exec_()
+    collector.stop()
+    assert sorted(got) == list(range(40))
+    loop = QEventLoop()
+    QTimer.singleShot(100, loop.quit)
+    loop.exec_()
+    assert liveCount() == 0

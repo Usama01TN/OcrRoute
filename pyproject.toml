@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
-version = "0.4.3"
+version = "0.4.4"
 description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
 readme = "README.md"
 license = { text = "MIT" }
@@ -77,4 +77,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-filterwarnings = ["ignore::DeprecationWarning"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  # starlette.testclient suggests httpx2; the httpx-based client is still the supported one for FastAPI tests
+  "ignore:Using `httpx` with `starlette.testclient`:Warning",
+]
