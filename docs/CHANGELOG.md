@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1 - 2026-09-24
+
+- **Fix (Full edition)**: EasyOCR was bundled but failed to import inside the executables. EasyOCR imports
+  `six.moves` without declaring `six`, and PyInstaller's `six.moves` handling left the real `six` module out of the
+  bundle (`ModuleNotFoundError: No module named 'six'`). `six` is now bundled explicitly.
+- **Frozen self-test**: after every Full build, `build_executable.py` runs the executable with
+  `--ocrroute-selftest` and imports PyTorch, torchvision, EasyOCR, PaddlePaddle, PaddleX, PaddleOCR and both engine
+  modules inside it; any failure aborts the build with the full traceback, so an incomplete bundle cannot be
+  archived or released.
+- **CI**: the verify step prints the actual import error for any engine the edition claims to bundle.
+
 ## 0.5.0 - 2026-09-24
 
 - **Full edition**: new executables `ocrroute-server-full` and `OcrRoute-Desktop-Full` with **EasyOCR** (PyTorch CPU)

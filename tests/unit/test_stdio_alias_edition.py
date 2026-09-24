@@ -65,3 +65,13 @@ def test_dashboard_does_not_alert_for_engines_absent_by_design(client):
     client.post('/panel/login', data={'username': 'admin', 'password': 'password123'}, follow_redirects=False)
     html = client.get('/panel/').text
     assert 'EasyOCR unavailable' not in html and 'PaddleOCR unavailable' not in html
+
+
+def test_selftest_reports_each_module(capsys):
+    from ocrroute import selftest
+
+    failed = selftest.run(['json', 'definitely_not_a_module_xyz'])
+    out = capsys.readouterr().out
+    assert failed == 1
+    assert 'SELFTEST OK   json' in out and 'SELFTEST FAIL definitely_not_a_module_xyz' in out
+    assert 'ModuleNotFoundError' in out  # full traceback, not just a flag

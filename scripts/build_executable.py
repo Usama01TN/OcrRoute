@@ -68,7 +68,7 @@ def hiddenImports():
     mods = ['uvicorn.logging', 'uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.http.h11_impl',
             'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan.on', 'anyio._backends._asyncio', 'engines',
             'engines.ocrplugin', 'engines.api', 'engines.local', 'AioOCR', 'AioOCR.ocrbase', 'pypdfium2', 'openpyxl',
-            'argon2', 'PIL.Image', 'ocrroute.enginelib_probe', 'ocrroute.runtime.engineinstall', 'mistralai', 'faulthandler', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
+            'argon2', 'PIL.Image', 'six', 'ocrroute.selftest', 'ocrroute.enginelib_probe', 'ocrroute.runtime.engineinstall', 'mistralai', 'faulthandler', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
     out = []
     for m in mods:
         out += ['--hidden-import', m]
@@ -171,7 +171,34 @@ def build(target, onefile, clean, edition='lean'):
     produced = join(DIST, name + ('.app' if target == 'desktop' and platform.system() == 'Darwin' else ''))
     if not exists(produced):
         produced = join(DIST, name + ('.exe' if platform.system() == 'Windows' else ''))
+    if edition == 'full' and target == 'server':
+        selftest(join(DIST, name, name + ('.exe' if platform.system() == 'Windows' else '')))
     return produced
+
+
+def selftest(binary):
+    """
+    Import every bundled deep-learning engine *inside* the frozen executable; raise with the full traceback when
+    one fails, so a broken bundle can never be archived or published.
+
+    :param binary: str  path of the frozen server executable
+    """
+    import json
+
+    with open(join(ROOT, 'build', 'edition.json')) as fh:
+        engines = json.load(fh).get('bundled_extra_engines', [])
+    modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy'],
+               'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib']}
+    wanted = [m for e in engines for m in modules.get(e, [])]
+    if not wanted:
+        return
+    print('frozen self-test:', ', '.join(wanted), flush=True)
+    r = subprocess.run([binary, '--ocrroute-selftest', ','.join(wanted)], capture_output=True, text=True, timeout=900)
+    print(r.stdout[-20000:], flush=True)
+    if r.returncode != 0:
+        tail = '\n'.join(r.stderr.splitlines()[-40:])
+        raise SystemExit('frozen self-test failed ({} module(s)); the bundle is incomplete.\n{}'.format(
+            r.stdout.count('SELFTEST FAIL'), tail))
 
 
 def archive(path, target):

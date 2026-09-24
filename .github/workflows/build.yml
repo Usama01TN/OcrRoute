@@ -123,6 +123,12 @@ jobs:
           assert mistral and mistral["available"], f"MistralOcr must be bundled: {mistral and mistral['import_error']}"
           print(f"OcrRoute {v['version']}: {len(e)} engines discovered, {len(ok)} importable in this bundle")
           missing = [x["id"] for x in e if not x["available"] and "crashed the interpreter" not in (x.get("import_error") or "")]
+          claimed = {"EasyOCR": "EasyOCR", "PaddleOCR": "PaddleOcr"}
+          for name in v.get("bundled_extra_engines", []):
+              x = next((y for y in e if y["id"] == claimed[name]), None)
+              if x and not x["available"]:
+                  print(f"::error::{name} is bundled in this edition but does not import in the frozen app: {x['import_error']}")
+                  raise SystemExit(1)
           print(f"{len(missing)} deep-learning engines not bundled by design (pip extras): {', '.join(missing)}")
           if crashed:
               print(f"::warning::{len(crashed)} engine(s) disabled because a compiled dependency crashed on this runner: {', '.join(crashed)}")

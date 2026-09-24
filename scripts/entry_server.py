@@ -16,6 +16,11 @@ from ocrroute.stdio import enableFaultHandler, ensureStreams  # noqa: E402
 ensureStreams('server')  # windowed builds start without stdout/stderr (sys.stderr is None)
 enableFaultHandler()  # a native crash prints the Python stack instead of nothing
 
+if len(sys.argv) > 1 and sys.argv[1] == '--ocrroute-selftest':  # build-time import check of the bundle
+    from ocrroute.selftest import main as _selftest  # noqa: E402
+
+    _selftest(sys.argv[1:])
+
 if len(sys.argv) > 1 and sys.argv[1] == '--ocrroute-probe-engines':  # child of crash-isolated discovery
     from ocrroute.enginelib_probe import main as _probe  # noqa: E402
 
