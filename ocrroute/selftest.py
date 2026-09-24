@@ -39,7 +39,18 @@ def _torchvisionOps():
     assert keep.tolist() == [0]
 
 
-CHECKS = {'paddle:compute': _paddleCompute, 'torch:compute': _torchCompute, 'torchvision:ops': _torchvisionOps}
+def _paddleOcrRequirements():
+    """PaddleX refuses to build its OCR pipeline unless its `ocr` (or `ocr-core`) extra is satisfied, judged by
+    distribution *metadata*; a missing .dist-info in the bundle only shows up at the first OCR request."""
+    from paddlex.utils.deps import EXTRAS, is_dep_available, is_extra_available
+
+    names = [e for e in ('ocr-core', 'ocr') if e in EXTRAS]
+    if not any(is_extra_available(e) for e in names):
+        missing = sorted(set(d for e in names for d in EXTRAS[e] if not is_dep_available(d)))
+        raise RuntimeError('PaddleX OCR requirements not met in the bundle; missing metadata: {}'.format(missing))
+
+
+CHECKS = {'paddleocr:requirements': _paddleOcrRequirements, 'paddle:compute': _paddleCompute, 'torch:compute': _torchCompute, 'torchvision:ops': _torchvisionOps}
 
 
 def run(modules):

@@ -128,3 +128,33 @@ def test_mkldnn_is_off_by_default():
     from ocrroute import enginelib  # noqa: F401
 
     assert os.environ.get('PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT') in ('False', 'false', '0', 'True', 'true', '1')
+
+
+def test_paddle_environment_defaults(monkeypatch):
+    from ocrroute import paddleenv
+
+    monkeypatch.setattr(paddleenv, 'paddleVersion', lambda: (3, 0))
+    env = {}
+    paddleenv.apply(env)
+    assert env['PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT'] == 'False'
+    assert env['PADDLE_PDX_MODEL_SOURCE'] == 'BOS'  # Paddle 3.0 cannot load the latest (Hugging Face) exports
+    monkeypatch.setattr(paddleenv, 'paddleVersion', lambda: (3, 3))
+    env = {}
+    paddleenv.apply(env)
+    assert 'PADDLE_PDX_MODEL_SOURCE' not in env  # newer Paddle keeps PaddleX's default source
+    env = {'PADDLE_PDX_MODEL_SOURCE': 'huggingface', 'PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT': 'True'}
+    monkeypatch.setattr(paddleenv, 'paddleVersion', lambda: (3, 0))
+    paddleenv.apply(env)
+    assert env['PADDLE_PDX_MODEL_SOURCE'] == 'huggingface' and env['PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT'] == 'True'
+
+
+def test_declared_dependencies_follow_requirements():
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+    import build_executable as b
+
+    deps = b.declaredDependencies('fastapi')
+    assert 'starlette' in deps and 'pydantic' in deps  # declared, installed, followed recursively
+    assert b.declaredDependencies('distribution-that-does-not-exist-xyz') == []

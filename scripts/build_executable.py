@@ -153,6 +153,45 @@ def nativeArgs(package):
     return args
 
 
+def declaredDependencies(dist, extras=()):
+    """
+    Distribution names ``dist`` declares (base requirements plus the given extras) that are installed, followed
+    recursively. Libraries such as PaddleX check their dependencies by *distribution metadata* at runtime, so the
+    metadata of every declared dependency has to be in the bundle, whatever the library version.
+
+    :param dist: str
+    :param extras: tuple[str]
+    :return: list[str]
+    """
+    from importlib import metadata
+
+    try:
+        from packaging.requirements import Requirement
+    except ImportError:  # pragma: no cover
+        return []
+    seen, todo = set(), [(dist, tuple(extras))]
+    while todo:
+        name, wanted = todo.pop()
+        try:
+            reqs = metadata.requires(name) or []
+        except metadata.PackageNotFoundError:
+            continue
+        for raw in reqs:
+            try:
+                req = Requirement(raw)
+            except Exception:  # noqa: BLE001
+                continue
+            envs = [{'extra': e} for e in wanted] or [{'extra': ''}]
+            if req.marker is not None and not any(req.marker.evaluate(env) for env in envs):
+                continue
+            key = req.name.lower()
+            if key in seen or not installed(req.name):
+                continue
+            seen.add(key)
+            todo.append((req.name, tuple(req.extras)))
+    return sorted(seen)
+
+
 def editionArgs(edition):
     """
     :param edition: str  lean | full
@@ -168,9 +207,12 @@ def editionArgs(edition):
     for pkg in FULL_PACKAGES:
         if find_spec(pkg) is not None:
             out += ['--collect-all', pkg]
-    for dist in FULL_METADATA:
-        if installed(dist):
-            out += ['--copy-metadata', dist]
+    dists = set(d for d in FULL_METADATA if installed(d))
+    for root, extras in (('paddlex', ('ocr', 'ocr-core')), ('paddleocr', ()), ('easyocr', ())):
+        if installed(root):
+            dists.update(declaredDependencies(root, extras))
+    for dist in sorted(dists):
+        out += ['--copy-metadata', dist]
     out += nativeArgs('torchvision')  # _C_stable / image_stable and their vendored libraries, at their own paths
     out += nativeArgs('paddle')  # paddle/libs (MKL, oneDNN...) at the exact path Paddle registers at runtime
     return out
@@ -245,7 +287,8 @@ def selftest(binary):
     with open(join(ROOT, 'build', 'edition.json')) as fh:
         engines = json.load(fh).get('bundled_extra_engines', [])
     modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy', 'torch:compute', 'torchvision:ops'],
-               'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib', 'paddle:compute']}
+               'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib', 'paddleocr:requirements',
+                             'paddle:compute']}
     wanted = [m for e in engines for m in modules.get(e, [])]
     if not wanted:
         return
@@ -284,6 +327,12 @@ def main():
     """
     :return: int
     """
+    sys.path.insert(0, ROOT)
+    from ocrroute import paddleenv
+
+    # PyInstaller imports packages in helper processes to enumerate their modules; they inherit this environment.
+    # Without it PaddleX 3.0 downloads fonts at import, and a failed download silently empties its module list.
+    print('build environment:', paddleenv.apply(), flush=True)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--target', choices=('server', 'desktop', 'all'), default='all')
     ap.add_argument('--onefile', action='store_true', help='single-file executables (slower start)')

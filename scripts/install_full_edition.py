@@ -36,10 +36,20 @@ def easyocrSupported():
     return not (sys.platform == 'darwin' and platform.machine().lower() in ('x86_64', 'amd64'))
 
 
+def legacyPaddle():
+    """
+    :return: bool  True where PaddlePaddle stops at 3.0.0 (macOS x86_64). The newest PaddleOCR there downloads models
+             exported for Paddle >= 3.3 ("Type of attribute: strides is not right" when loading them), so the
+             releases made for Paddle 3.0 are pinned: paddlex 3.0.3 + paddleocr 3.0.3 (PP-OCRv5 models).
+    """
+    return sys.platform == 'darwin' and platform.machine().lower() in ('x86_64', 'amd64')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--no-easyocr', action='store_true', help='PaddleOCR only')
     ap.add_argument('--no-paddle', action='store_true', help='EasyOCR only')
+    ap.add_argument('--legacy-paddle', action='store_true', help='force the Paddle 3.0 pins (testing on other platforms)')
     args = ap.parse_args()
     withEasy = easyocrSupported() and not args.no_easyocr
     withPaddle = not args.no_paddle
@@ -49,7 +59,13 @@ def main():
         else:
             pip('install', '--prefer-binary', 'torch', 'torchvision')
         pip('install', '--prefer-binary', 'easyocr>=1.7', NUMPY)
-    if withPaddle:
+    if withPaddle and (legacyPaddle() or args.legacy_paddle):
+        pip('install', '--prefer-binary', 'paddlepaddle==3.0.0', 'paddlex[ocr]==3.0.3', NUMPY)
+        # paddleocr 3.0.3 asks for paddlex[ie,multimodal,ocr]>=3.0.3: no upper bound (pip would fetch the newest
+        # PaddleX and its v6 models) and two extras that pull large unrelated stacks. Install it without deps.
+        pip('install', '--no-deps', 'paddleocr==3.0.3')
+        pip('install', 'PyYAML>=6', 'typing-extensions>=4.12', 'setuptools')  # Paddle 3.0 imports it undeclared
+    elif withPaddle:
         pip('install', '--prefer-binary', 'paddlepaddle>=3.0', 'paddleocr>=3.0', NUMPY)
     # exactly one OpenCV, headless, at the version PaddleX pins
     pip('uninstall', '-y', 'opencv-python', 'opencv-python-headless', 'opencv-contrib-python', 'opencv-contrib-python-headless')

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.4 - 2026-09-24
+
+- **Fix (Full edition, PaddleOCR on macOS x86_64)**: `Type of attribute: strides is not right` when loading models.
+  Intel Macs stop at PaddlePaddle 3.0.0, while the newest PaddleOCR downloads PP-OCRv6 models exported for Paddle
+  3.3. Intel Macs now pin the releases made for Paddle 3.0 (paddlex 3.0.3 + paddleocr 3.0.3, PP-OCRv5 models) and
+  download from BOS (`PADDLE_PDX_MODEL_SOURCE=BOS`), which serves the `paddle3.0.0` exports; Hugging Face serves only
+  the latest export.
+- **PaddleX 3.0 offline**: it downloaded two fonts at import time (used only for visualisations), so PaddleOCR was
+  unavailable offline, and during a build PyInstaller's module scan of PaddleX failed silently (0 modules, so
+  `colorlog` and other PaddleX imports were not bundled). A system font is used instead
+  (`PADDLE_PDX_LOCAL_FONT_FILE_PATH`), in the app and in the build environment.
+- `ocrroute/paddleenv.py`: one place for the Paddle environment defaults (MKLDNN, model source, font).
+- The Full build copies the metadata of every dependency PaddleX, PaddleOCR and EasyOCR *declare* (followed
+  recursively), because PaddleX checks its `ocr` extra by distribution metadata at runtime.
+- Self-test adds `paddleocr:requirements` (PaddleX's own OCR-requirements check) to the import and computation checks.
+- The install script also installs `setuptools`, which Paddle 3.0 imports without declaring it.
+
 ## 0.5.3 - 2026-09-24
 
 - **Fix (Full edition, PaddleOCR on Linux)**: `libmklml_intel.so: cannot open shared object file`. Paddle finds its

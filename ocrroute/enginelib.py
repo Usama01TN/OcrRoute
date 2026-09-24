@@ -175,12 +175,9 @@ if _safeDiscoveryEnabled():
         _sys.modules[_name] = None
         _sys.modules['AioOCR.' + _name] = None
 
-import os as _envOs  # noqa: E402
+from ocrroute import paddleenv as _paddleEnv  # noqa: E402
 
-# PaddlePaddle 3.3's oneDNN (MKLDNN) executor rejects some PaddleOCR models on CPU ("ConvertPirAttribute2Runtime
-# Attribute not support [pir::ArrayAttribute...]"). Default PaddleX's documented switch to off; set
-# PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=True to opt back in once Paddle fixes it.
-_envOs.environ.setdefault('PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT', 'False')
+_paddleEnv.apply()  # MKLDNN default, model source for Paddle 3.0, local font (see ocrroute/paddleenv.py)
 
 from ocrroute import opencv_alias as _metadataAlias  # noqa: E402
 
