@@ -27,6 +27,17 @@ discovery, option forms, CLI, panel and desktop pick it up. Optionally add a `[e
 If an engine imports but its runtime dependency is missing (`engine_missing`), it is marked unavailable in
 the registry and the database with the hint it printed, so `auto` routes skip it until the next rescan.
 
+## Full edition (EasyOCR + PaddleOCR built in)
+
+`python scripts/install_full_edition.py && python scripts/build_executable.py --edition full` builds it locally;
+CI builds it for every platform. Details that make the two engines coexist with the rest of OcrRoute:
+
+- PyTorch comes from the CPU-only index on Linux (the PyPI Linux wheel pulls ~2.5 GB of CUDA libraries).
+- PaddleX (PaddleOCR 3) caps NumPy below 2.4 and pins OpenCV 4.10.0.84. The Full edition keeps exactly one OpenCV,
+  the **headless** contrib build: the GUI builds ship Qt libraries that break PyQt5 on Linux.
+- PaddleX checks for the distribution name `opencv-contrib-python`. `ocrroute.opencv_alias` answers that lookup with
+  the installed headless contrib build (same `cv2` module); a genuinely installed GUI build always wins.
+
 ## Deep-learning engines: install on demand
 
 Seven local engines need a deep-learning framework. They are **not bundled in the stand-alone executables**:

@@ -135,11 +135,18 @@ def _root(
     os.environ.setdefault('OCRROUTE_LOG_LEVEL', 'DEBUG' if verbose else ('ERROR' if quiet else 'WARNING'))
 
 
+def _editionInfo():
+    from ocrroute import edition
+
+    i = edition.info()
+    return {'edition': i['edition'], 'bundled_extra_engines': i['bundled_extra_engines']}
+
+
 @app.command()
 def version(as_json: bool = JSON_OPT) -> None:
     """Print the version."""
     _out(
-        {'name': 'OcrRoute', 'version': __version__},
+        dict({'name': 'OcrRoute', 'version': __version__}, **_editionInfo()),
         as_json,
         lambda d: console.print('OcrRoute {}'.format(d['version'])),
     )

@@ -9,13 +9,13 @@ This module deliberately does **not** import ``ocrroute.enginelib`` (that is wha
 """
 from __future__ import absolute_import, division, print_function
 
-import faulthandler
 import os
 import sys
 from os.path import abspath, dirname, exists, join
 from pkgutil import iter_modules
 
 SKIP_ENV = 'OCRROUTE_PROBE_SKIP'
+OUT_ENV = 'OCRROUTE_PROBE_OUT'  # progress file (windowed children have no stdout)
 CRASH_ENV = 'OCRROUTE_PROBE_CRASH'  # test hook: abort when reaching this module, to exercise the parent's recovery
 
 
@@ -46,13 +46,17 @@ def moduleNames(root):
 
 
 def main():
-    faulthandler.enable(file=sys.stderr, all_threads=True)
+    from ocrroute.stdio import enableFaultHandler, ensureStreams
+
+    ensureStreams('probe')
+    enableFaultHandler()
     root = aioocrRoot()
     if root not in sys.path:
         sys.path.insert(0, root)
     skip = set(filter(None, os.environ.get(SKIP_ENV, '').split(',')))
     crash = os.environ.get(CRASH_ENV, '')
-    out = sys.stdout
+    target = os.environ.get(OUT_ENV)
+    out = open(target, 'a', encoding='utf-8', buffering=1) if target else sys.stdout
     import engines.ocrplugin  # noqa: F401  (shared base class, as AioOCR expects)
 
     for name in moduleNames(root):

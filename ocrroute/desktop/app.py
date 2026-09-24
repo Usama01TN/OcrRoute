@@ -281,6 +281,9 @@ def _singleInstance():
 
 
 def main(argv=None):
+    from ocrroute.stdio import ensureStreams
+
+    ensureStreams('desktop')  # pythonw / windowed builds have no console streams
     QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QCoreApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     app = QApplication(argv or sys.argv)

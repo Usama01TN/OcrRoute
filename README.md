@@ -45,12 +45,21 @@ metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`)
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
 
-## More engines
+## Editions and more engines
 
-The executables include every engine that needs no deep-learning framework (49 of 56, including Tesseract, RapidOCR,
-Mistral OCR and all cloud engines). The PyTorch / TensorFlow / PaddlePaddle engines install on demand in a pip
-installation: click **Install** in the Engines page, or `ocrroute engines install EasyOCR`, or
-`pip install "ocrroute[easyocr]"`. See `docs/ENGINES.md`.
+The stand-alone executables come in two editions:
+
+| Edition | Files | Engines | Unpacked size |
+|---|---|---|---|
+| **Lean** | `ocrroute-server-*`, `ocrroute-desktop-*` | 49 of 56: every engine without a deep-learning framework (Tesseract, RapidOCR, Mistral OCR, all cloud engines) | ~150 MB |
+| **Full** | `ocrroute-server-full-*`, `ocrroute-desktop-full-*` | Lean + **EasyOCR** (PyTorch, CPU) + **PaddleOCR** (PaddlePaddle) | ~1.5 GB |
+
+On Intel Macs the Full edition includes PaddleOCR but not EasyOCR: PyTorch publishes no Intel-Mac build newer than
+2.2, which predates NumPy 2. EasyOCR and PaddleOCR download their model weights on first use.
+
+The remaining deep-learning engines (Surya, Calamari, keras-ocr, GLM, olmOCR) install on demand in a pip
+installation: click **Install** in the Engines page, run `ocrroute engines install SuryaOcr`, or
+`pip install "ocrroute[surya]"`. See `docs/ENGINES.md`.
 
 ## Stand-alone executables
 

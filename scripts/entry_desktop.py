@@ -11,9 +11,10 @@ if getattr(sys, 'frozen', False):
     sys.path.insert(0, base)
     sys.path.insert(0, os.path.join(base, 'AioOCR'))
 
-import faulthandler  # noqa: E402
+from ocrroute.stdio import enableFaultHandler, ensureStreams  # noqa: E402
 
-faulthandler.enable(all_threads=True)
+ensureStreams('desktop')  # windowed builds start without stdout/stderr (sys.stderr is None)
+enableFaultHandler()  # a native crash prints the Python stack instead of nothing
 
 if len(sys.argv) > 1 and sys.argv[1] == '--ocrroute-probe-engines':  # child of crash-isolated discovery
     from ocrroute.enginelib_probe import main as _probe  # noqa: E402

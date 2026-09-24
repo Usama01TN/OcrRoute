@@ -49,8 +49,22 @@ def planFor(module):
     extra, packages, framework, size = entry
     command = 'pip install "ocrroute[{}]"'.format(extra)
     if isFrozen() and framework:
-        hint = ('Not included in the stand-alone executable (needs {}, {}). Install OcrRoute with pip and run: {}'
-                .format(framework, size, command))
+        from ocrroute import edition
+
+        full = extra in ('easyocr', 'paddle')  # engines the Full edition bundles
+        if full and edition.name() == 'lean':
+            hint = ('Not included in this lean executable (needs {}, {}). Download the Full edition '
+                    '(ocrroute-server-full / OcrRoute-Desktop-Full), or install with pip: {}'.format(framework, size, command))
+        elif full and edition.name() == 'full':
+            import platform
+
+            intelMac = sys.platform == 'darwin' and platform.machine().lower() in ('x86_64', 'amd64')
+            why = ('{} has no build for Intel Macs newer than 2.2, which predates NumPy 2'.format(framework)
+                   if intelMac and framework == 'PyTorch' else 'this Full build was made without it')
+            hint = 'Not included in this Full executable ({}). Install with pip: {}'.format(why, command)
+        else:
+            hint = ('Not included in the stand-alone executables (needs {}, {}). Install OcrRoute with pip and run: {}'
+                    .format(framework, size, command))
     else:
         hint = 'One click: Install ({}{}), or run: {}'.format(', '.join(packages), ', ' + size if size else '', command)
     return {'extra': extra, 'packages': packages, 'framework': framework, 'size': size, 'command': command,

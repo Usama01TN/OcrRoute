@@ -78,17 +78,82 @@ def hiddenImports():
     return out
 
 
-def build(target, onefile, clean):
+FULL_PACKAGES = ('easyocr', 'paddleocr', 'paddlex', 'paddle')  # collected completely when installed
+# distribution metadata PaddleX / PaddleOCR / EasyOCR read at runtime via importlib.metadata
+FULL_METADATA = ('paddlex', 'paddleocr', 'paddlepaddle', 'easyocr', 'torch', 'torchvision', 'numpy', 'pillow',
+                 'opencv-contrib-python-headless', 'pyclipper', 'shapely', 'imagesize', 'pypdfium2', 'python-bidi',
+                 'pydantic', 'pyyaml', 'requests', 'ujson', 'tqdm', 'modelscope', 'huggingface-hub', 'aistudio-sdk')
+
+
+def installed(dist):
+    """
+    :param dist: str  distribution name
+    :return: bool
+    """
+    from importlib import metadata
+
+    try:
+        metadata.distribution(dist)
+        return True
+    except metadata.PackageNotFoundError:
+        return False
+
+
+def editionArgs(edition):
+    """
+    :param edition: str  lean | full
+    :return: list[str]  PyInstaller arguments for the edition
+    """
+    if edition == 'lean':
+        return ['--exclude-module', 'torch', '--exclude-module', 'torchvision', '--exclude-module', 'transformers',
+                '--exclude-module', 'tensorflow', '--exclude-module', 'paddle', '--exclude-module', 'paddlex',
+                '--exclude-module', 'paddleocr', '--exclude-module', 'easyocr', '--exclude-module', 'cv2.gapi']
+    from importlib.util import find_spec
+
+    out = ['--exclude-module', 'transformers', '--exclude-module', 'tensorflow']
+    for pkg in FULL_PACKAGES:
+        if find_spec(pkg) is not None:
+            out += ['--collect-all', pkg]
+    for dist in FULL_METADATA:
+        if installed(dist):
+            out += ['--copy-metadata', dist]
+    return out
+
+
+def editionMarker(edition):
+    """
+    Write ``build/edition.json`` and return the --add-data argument that ships it as ``ocrroute/edition.json``.
+
+    :param edition: str
+    :return: list[str]
+    """
+    import json
+
+    engines = []
+    from importlib.util import find_spec
+
+    if edition == 'full':
+        engines = [n for n, mod in (('EasyOCR', 'easyocr'), ('PaddleOCR', 'paddleocr')) if find_spec(mod) is not None]
+    os.makedirs(join(ROOT, 'build'), exist_ok=True)
+    path = join(ROOT, 'build', 'edition.json')
+    with open(path, 'w') as fh:
+        json.dump({'edition': edition, 'bundled_extra_engines': engines}, fh)
+    sep = ';' if platform.system() == 'Windows' else ':'
+    return ['--add-data', '{}{}ocrroute'.format(path, sep)]
+
+
+def build(target, onefile, clean, edition='lean'):
     """
     :param target: str  server | desktop
     :param onefile: bool
     :param clean: bool
+    :param edition: str  lean | full (Full adds EasyOCR and PaddleOCR with their frameworks)
     :return: str  path of the produced bundle
     """
-    name = 'ocrroute-server' if target == 'server' else 'OcrRoute-Desktop'
+    name = ('ocrroute-server' if target == 'server' else 'OcrRoute-Desktop') + ('-full' if edition == 'full' else '')
     entry = join(ROOT, 'scripts', 'entry_server.py' if target == 'server' else 'entry_desktop.py')
     cmd = [sys.executable, '-m', 'PyInstaller', '--noconfirm', '--name', name, '--distpath', DIST,
-           '--workpath', join(ROOT, 'build', target), '--specpath', join(ROOT, 'build'),
+           '--workpath', join(ROOT, 'build', target + '-' + edition), '--specpath', join(ROOT, 'build'),
            '--paths', ROOT, '--paths', join(ROOT, 'AioOCR')]
     cmd += ['--onefile'] if onefile else ['--onedir']
     if clean:
@@ -99,8 +164,7 @@ def build(target, onefile, clean):
             cmd += ['--osx-bundle-identifier', 'io.ocrroute.desktop']
     else:
         cmd += ['--console', '--exclude-module', 'PyQt5']
-    cmd += ['--exclude-module', 'torch', '--exclude-module', 'transformers', '--exclude-module', 'tensorflow',
-            '--exclude-module', 'paddle', '--exclude-module', 'cv2.gapi']
+    cmd += editionArgs(edition) + editionMarker(edition)
     cmd += dataArgs() + hiddenImports() + [entry]
     print(' '.join(cmd))
     subprocess.check_call(cmd, cwd=ROOT)
@@ -139,12 +203,15 @@ def main():
     ap.add_argument('--onefile', action='store_true', help='single-file executables (slower start)')
     ap.add_argument('--no-archive', action='store_true')
     ap.add_argument('--clean', action='store_true')
+    ap.add_argument('--edition', choices=('lean', 'full'), default='lean',
+                    help='full = also EasyOCR and PaddleOCR (run scripts/install_full_edition.py first)')
     args = ap.parse_args()
     targets = ['server', 'desktop'] if args.target == 'all' else [args.target]
     outputs = []
     for t in targets:
-        produced = build(t, args.onefile, args.clean)
-        outputs.append(produced if args.no_archive else archive(produced, t))
+        produced = build(t, args.onefile, args.clean, args.edition)
+        label = t + ('-full' if args.edition == 'full' else '')
+        outputs.append(produced if args.no_archive else archive(produced, label))
     print('\n'.join(outputs))
     return 0
 

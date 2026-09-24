@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 - 2026-09-24
+
+- **Full edition**: new executables `ocrroute-server-full` and `OcrRoute-Desktop-Full` with **EasyOCR** (PyTorch CPU)
+  and **PaddleOCR** (PaddlePaddle) built in, next to the lean ones. Built by CI on Linux, Windows, macOS arm64 and
+  macOS x86_64 (PaddleOCR only: no PyTorch >= 2.3 for Intel Macs). CI runs a real OCR through every bundled engine
+  and checks the recognised text, and guards the 2 GiB release-file limit. `version --json` reports the edition.
+- **`ocrroute.opencv_alias`**: PaddleX refuses to start unless `opencv-contrib-python` is installed; the headless
+  contrib build (same `cv2`, no Qt libraries that clash with PyQt5) now satisfies that check.
+- **Fix (desktop executable)**: `RuntimeError: sys.stderr is None` at start. Windowed builds have no console
+  streams; `faulthandler.enable()` required one. `ocrroute.stdio.ensureStreams()` now gives GUI processes real
+  streams (`~/.ocrroute/logs/desktop.log`) before anything runs, and `faulthandler` is enabled only when possible.
+  The crash-isolation probe reports through a file instead of stdout (windowed children have none) and never opens
+  a console window on Windows.
+- **Dashboard**: no more "EasyOCR / PaddleOCR unavailable" alerts for engines that are absent by design; the Engines
+  page explains them (lean edition: points to the Full edition). Alerts remain for genuinely broken engines.
+
 ## 0.4.9 - 2026-09-24
 
 - **Fix (macOS x86_64 executable)**: the frozen server failed with `Symbol not found: _SSL_get0_group_name`.

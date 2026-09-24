@@ -46,6 +46,18 @@ if AIOOCR_ROOT not in path:
 CRASHED = {}  # module name -> explanation
 
 
+def _warn(text):
+    """Write to stderr when there is one (windowed GUI processes may have none)."""
+    import sys as _s
+
+    stream = _s.stderr
+    if stream is not None:
+        try:
+            stream.write(text)
+        except (OSError, ValueError, AttributeError):
+            pass
+
+
 def _safeDiscoveryEnabled():
     import os as _os
     import sys as _s
@@ -109,12 +121,25 @@ def probeCrashingModules(maxRounds=12, timeout=300):
         cachePath = ''
     crashed = {}
     for _round in range(maxRounds):
-        env = dict(_os.environ, **{_p.SKIP_ENV: ','.join(crashed), 'OCRROUTE_SAFE_DISCOVERY': '0'})
+        import tempfile
+
+        fd, progress = tempfile.mkstemp(prefix='ocrroute-probe-', suffix='.txt')
+        _os.close(fd)
+        env = dict(_os.environ, **{_p.SKIP_ENV: ','.join(crashed), 'OCRROUTE_SAFE_DISCOVERY': '0', _p.OUT_ENV: progress})
+        flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)  # Windows: never flash a console window
         try:
-            r = subprocess.run(_probeCommand(), env=env, capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run(_probeCommand(), env=env, capture_output=True, text=True, timeout=timeout,
+                               creationflags=flags)
         except subprocess.TimeoutExpired:
             break  # a hang is not a crash; let normal discovery proceed
-        lines = r.stdout.splitlines()
+        try:
+            with open(progress, encoding='utf-8') as fh:
+                lines = fh.read().splitlines()
+        finally:
+            try:
+                _os.remove(progress)
+            except OSError:
+                pass
         if r.returncode == 0 and 'DONE' in lines:
             break
         started = [ln[6:] for ln in lines if ln.startswith('START ')]
@@ -129,7 +154,7 @@ def probeCrashingModules(maxRounds=12, timeout=300):
             [ln for ln in errLines if not ln.startswith(('Extension modules', 'Current thread', 'Thread 0x', 'File '))][-1:]
         crashed[culprit] = 'crashed the interpreter while importing on this platform ({}){}'.format(
             why, (': ' + ' | '.join(tail))[:300] if tail else '')
-        _sys.stderr.write('Warning: engine module {} {}; it is disabled.\n'.format(culprit, crashed[culprit]))
+        _warn('Warning: engine module {} {}; it is disabled.\n'.format(culprit, crashed[culprit]))
     if cachePath:
         try:
             with open(cachePath, 'w') as fh:
@@ -145,10 +170,14 @@ if _safeDiscoveryEnabled():
     try:
         CRASHED.update(probeCrashingModules())
     except Exception as _exc:  # noqa: BLE001 - never block startup because of the probe itself
-        _sys.stderr.write('Warning: crash-isolated engine discovery skipped: {}\n'.format(_exc))
+        _warn('Warning: crash-isolated engine discovery skipped: {}\n'.format(_exc))
     for _name in CRASHED:  # blocked modules raise ImportError, which AioOCR already handles
         _sys.modules[_name] = None
         _sys.modules['AioOCR.' + _name] = None
+
+from ocrroute import opencv_alias as _metadataAlias  # noqa: E402
+
+_metadataAlias.install()  # headless OpenCV satisfies libraries that check for the GUI distribution name
 
 import engines  # noqa: E402  (AioOCR/engines, as the library expects)
 import engines.api  # noqa: E402
@@ -179,7 +208,7 @@ def _captureWarnings(fn):
 
     if _os.environ.get('OCRROUTE_VERBOSE_DISCOVERY'):  # opt-in: echo them to stderr like AioOCR does
         for ln in lines:
-            _sys.stderr.write(ln + '\n')
+            _warn(ln + '\n')
 
 
 def _importAioOcr():

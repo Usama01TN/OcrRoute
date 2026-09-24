@@ -16,24 +16,20 @@ permissions:
 
 jobs:
   build:
-    name: ${{ matrix.label }}
+    name: ${{ matrix.platform.label }} (${{ matrix.edition }})
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-22.04
-            label: linux-x86_64
-          - os: windows-2022
-            label: windows-x86_64
-          - os: macos-latest       # Apple silicon (arm64); follows GitHub's current macOS image
-            label: macos-arm64
-          # Intel (x86_64). macos-13 was retired on 2025-12-04: jobs on that label wait for a runner forever.
-          # macos-15-intel is GitHub's last x86_64 macOS image, announced as available until August 2027;
-          # after that, drop this leg (Apple silicon Macs run arm64 builds natively).
-          - os: macos-15-intel
-            label: macos-x86_64
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+        edition: [lean, full]   # full = lean + EasyOCR (PyTorch CPU) + PaddleOCR (PaddlePaddle)
+        platform:
+          - { os: ubuntu-22.04, label: linux-x86_64 }
+          - { os: windows-2022, label: windows-x86_64 }
+          - { os: macos-latest, label: macos-arm64 }       # Apple silicon; follows GitHub's current macOS image
+          # Intel. macos-13 was retired on 2025-12-04 (jobs on it wait forever). macos-15-intel is GitHub's last
+          # x86_64 macOS image, announced as available until August 2027; drop this entry after that.
+          - { os: macos-15-intel, label: macos-x86_64 }
+    runs-on: ${{ matrix.platform.os }}
+    timeout-minutes: ${{ matrix.edition == 'full' && 150 || 60 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,23 +60,30 @@ jobs:
           import cryptography.hazmat.bindings._rust  # noqa: F401  (must import cleanly before freezing)
           import mistralai  # noqa: F401  (Mistral OCR is bundled)
           PY
+      - name: Install Full-edition engines (EasyOCR + PaddleOCR)
+        if: matrix.edition == 'full'
+        shell: bash
+        run: python scripts/install_full_edition.py   # skips EasyOCR on macOS x86_64 (no PyTorch >= 2.3 there)
       - name: Smoke test
         env: { QT_QPA_PLATFORM: offscreen }
         run: pytest -q tests/unit
       - name: Build executables
-        run: python scripts/build_executable.py --target all --clean ${{ inputs.onefile && '--onefile' || '' }}
+        run: python scripts/build_executable.py --target all --clean --edition ${{ matrix.edition }} ${{ inputs.onefile && '--onefile' || '' }}
       - name: Verify server binary
         shell: bash
         env:
           OCRROUTE_HOME: ${{ runner.temp }}/ocrroute-home
           PYTHONIOENCODING: utf-8
           PYTHONFAULTHANDLER: "1"
+          EDITION: ${{ matrix.edition }}
+          PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
         run: |
           # GitHub runs this with `bash -e`; turn -e OFF so check() can capture a failure and print its logs
           # (with -e, a failing command ends the script before its exit code can be read).
           set +e -u -o pipefail
-          if [ "${RUNNER_OS}" = "Windows" ]; then BIN="dist/ocrroute-server/ocrroute-server.exe"; else BIN="dist/ocrroute-server/ocrroute-server"; fi
-          echo "runner: ${RUNNER_OS} $(uname -m) | binary: $BIN"
+          SUFFIX=""; [ "${EDITION}" = "full" ] && SUFFIX="-full"
+          if [ "${RUNNER_OS}" = "Windows" ]; then BIN="dist/ocrroute-server${SUFFIX}/ocrroute-server${SUFFIX}.exe"; else BIN="dist/ocrroute-server${SUFFIX}/ocrroute-server${SUFFIX}"; fi
+          echo "runner: ${RUNNER_OS} $(uname -m) | edition: ${EDITION} | binary: $BIN"
           [ "${RUNNER_OS}" = "macOS" ] && { sw_vers || true; file "$BIN" || true; }
           test -x "$BIN" || { echo "::error::frozen binary not found at $BIN"; ls -R dist | head -50; exit 1; }
           check() {  # check <name> <cmd...>: run, keep stdout/stderr in files, explain any failure
@@ -125,6 +128,22 @@ jobs:
               print(f"::warning::{len(crashed)} engine(s) disabled because a compiled dependency crashed on this runner: {', '.join(crashed)}")
           PY
           [ $? -eq 0 ] || exit 1
+          if [ "${EDITION}" = "full" ]; then
+            # Real OCR through every engine this Full build bundles (downloads the engines' models on first use).
+            python -c "from PIL import Image, ImageDraw, ImageFont; im = Image.new('RGB', (900, 180), 'white'); ImageDraw.Draw(im).text((30, 50), 'OcrRoute Invoice 2026', fill='black', font=ImageFont.load_default(size=64)); im.save('full-test.png')"
+            for ENGINE in $(python -c "import json; v = json.load(open('version.out')); print(' '.join({'EasyOCR': 'EasyOCR', 'PaddleOCR': 'PaddleOcr'}[n] for n in v['bundled_extra_engines']))"); do
+              check "ocr-$ENGINE" "$BIN" ocr full-test.png -e "$ENGINE" --no-cache
+              python - "$ENGINE" <<'PY'
+          import sys
+          engine = sys.argv[1]
+          text = open(f"ocr-{engine}.out", encoding="utf-8").read()
+          print(f"{engine}: {text.strip()[:120]!r}")
+          assert "2026" in text or "invoice" in text.lower(), f"{engine} did not read the test image"
+          PY
+              [ $? -eq 0 ] || exit 1
+            done
+            python -c "import json, platform, sys; v = json.load(open('version.out')); want = ['PaddleOCR'] + ([] if (sys.platform == 'darwin' and platform.machine() == 'x86_64') else ['EasyOCR']); missing = [n for n in want if n not in v['bundled_extra_engines']]; assert not missing, f'Full edition is missing {missing}'; print('Full edition bundles:', ', '.join(v['bundled_extra_engines']))" || exit 1
+          fi
           # Smoke-test the server itself: start, hit /v1/health, stop.
           "$BIN" serve --port 20299 > serve.log 2>&1 &
           PID=$!
@@ -139,7 +158,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: verify-logs-${{ matrix.label }}
+          name: verify-logs-${{ matrix.platform.label }}-${{ matrix.edition }}
           path: |
             *.out
             *.err
@@ -152,7 +171,7 @@ jobs:
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: ocrroute-${{ matrix.label }}
+          name: ocrroute-${{ matrix.platform.label }}-${{ matrix.edition }}
           path: |
             dist/*.zip
             dist/*.tar.gz
@@ -162,7 +181,7 @@ jobs:
         shell: bash
         run: |
           {
-            echo "### 📦 ${{ matrix.label }}"
+            echo "### 📦 ${{ matrix.platform.label }}-${{ matrix.edition }}"
             echo ""
             echo "| file | size |"
             echo "|---|---|"
@@ -181,6 +200,10 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      - name: Size guard (GitHub release files must be < 2 GiB)
+        run: |
+          find release -type f -size +1900M -print | tee too-big.txt
+          if [ -s too-big.txt ]; then echo "::error::release files over 1.9 GB (limit 2 GiB)"; exit 1; fi
       - name: Checksums
         run: cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - name: GitHub Release with executables

@@ -19,3 +19,7 @@ engines.out
 engines.err
 probe.out
 probe.err
+full-test.png
+ocr-*.out
+ocr-*.err
+full-edition.txt

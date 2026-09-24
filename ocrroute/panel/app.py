@@ -236,9 +236,16 @@ def overview(request: Request, db: Session = Depends(getDb), hours: float = 24) 
     _require(request)
     ctx = getContext()
     alerts: list[str] = []
+    from ocrroute.runtime.engineinstall import planFor
+
     for e in ctx.registry.all():
-        if not e.available and e.kind == 'local' and e.id in ('Tesseract', 'RapidOcr', 'PaddleOcr', 'EasyOCR'):
-            alerts.append('{} unavailable - {}'.format(e.name, e.install_hint))
+        # Alert only when something is actually broken. Engines that are absent by design (not bundled in the
+        # lean executable, or optional pip extras) are explained on the Engines page, not raised as warnings.
+        if e.available or e.kind != 'local' or e.id not in ('Tesseract', 'RapidOcr', 'PaddleOcr', 'EasyOCR'):
+            continue
+        if planFor(e.module) is not None and 'crashed the interpreter' not in (e.import_error or ''):
+            continue
+        alerts.append('{} unavailable - {}'.format(e.name, e.install_hint))
     provs = (
         db.execute(select(Provider).where(Provider.enabled.is_(True)).options(selectinload(Provider.engine)))
         .scalars()
