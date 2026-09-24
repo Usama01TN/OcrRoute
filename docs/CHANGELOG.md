@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.6 - 2026-09-23
+
+- **CI**: the macOS Intel build requested the retired `macos-13` runner label and queued forever. It now uses
+  `macos-15-intel` (GitHub's last x86_64 macOS image); the Apple-silicon build uses `macos-latest`. Build jobs have a
+  60-minute timeout.
+
 ## 0.4.5 - 2026-09-23
 
 - **Fix (CLI, all platforms)**: `--json` output piped into a reader that stops early (`| head`) failed the command:

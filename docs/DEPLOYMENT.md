@@ -38,7 +38,14 @@ Outputs land in `dist/` as archives named `ocrroute-<target>-<version>-<os>-<arc
 untouched `AioOCR/` tree and the panel assets; Tesseract still has to be installed on the target machine for the
 zero-config engine (cloud engines need only a key).
 
-CI: `.github/workflows/build.yml` builds on `ubuntu-22.04`, `windows-2022`, `macos-13` (x86_64) and `macos-14` (arm64),
+CI: `.github/workflows/build.yml` builds on `ubuntu-22.04`, `windows-2022`, `macos-latest` (arm64) and `macos-15-intel` (x86_64),
 runs the unit tests, verifies the frozen server binary (`version`, `engines list`), uploads artifacts (30-day
 retention) with the artifact URL in the job summary, and on `v*` tags publishes a GitHub Release with `SHA256SUMS.txt`.
 Manual runs (`workflow_dispatch`) can request `--onefile` bundles. Binaries are unsigned (known limitation).
+
+### macOS runner labels
+
+GitHub retired the `macos-13` image on 2025-12-04; a job requesting a retired label never gets a runner and stays
+"Waiting for a runner to pick up this job" indefinitely. Intel builds use `macos-15-intel`, which GitHub describes as
+its last x86_64 macOS image (announced as available until August 2027). When it is retired, remove the
+`macos-x86_64` matrix entry: Apple silicon Macs run the arm64 build natively.
