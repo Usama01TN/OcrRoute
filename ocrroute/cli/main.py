@@ -8,6 +8,7 @@ from __future__ import absolute_import, division, print_function
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -54,11 +55,62 @@ def _ctx():
     return getContext()
 
 
+def _closedPipe(exc):
+    """
+    :param exc: BaseException
+    :return: bool  True when the reader of our stdout went away (``| head``, a closed pager). POSIX reports EPIPE
+             (BrokenPipeError); Windows reports EINVAL (errno 22) for the same condition.
+    """
+    import errno
+
+    return isinstance(exc, BrokenPipeError) or (isinstance(exc, OSError) and exc.errno in (errno.EPIPE, errno.EINVAL))
+
+
+def _quietExit():
+    """
+    Point stdout at devnull so the interpreter's final flush cannot raise again, then exit successfully:
+    a consumer that stops reading early is not an error of this program.
+    """
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+    except (OSError, ValueError, AttributeError):
+        pass
+    raise SystemExit(0)
+
+
+def emitJson(data):
+    """
+    Write machine-readable JSON to stdout: plain text (no Rich markup, colour or console emulation), UTF-8
+    regardless of the Windows code page, newline-terminated, and tolerant of a reader that closes early.
+
+    :param data: any JSON-serialisable value
+    """
+    text = json.dumps(data, default=str, indent=2, ensure_ascii=False) + '\n'
+    stream = getattr(sys.stdout, 'buffer', None)
+    try:
+        if stream is not None:
+            stream.write(text.encode('utf-8'))
+            stream.flush()
+        else:
+            sys.stdout.write(text)
+            sys.stdout.flush()
+    except OSError as exc:
+        if _closedPipe(exc):
+            _quietExit()
+        raise
+
+
 def _out(data: Any, as_json: bool, render=None) -> None:
     if as_json or render is None:
-        console.print_json(json.dumps(data, default=str))
+        emitJson(data)
     else:
-        render(data)
+        try:
+            render(data)
+        except OSError as exc:
+            if _closedPipe(exc):
+                _quietExit()
+            raise
 
 
 def _table(columns: list[str], rows: list[list[Any]], title: str = '') -> None:
@@ -316,7 +368,7 @@ def ocr(
             (output_dir / '{}{}'.format(stem, ext)).write_bytes(data)
             err.print('[green]✓[/green] {}'.format(output_dir / '{}{}'.format(stem, ext)))
     elif kinds == ['json']:
-        console.print_json(json.dumps(res.toDict(), default=str))
+        emitJson(res.toDict())
     else:
         console.print(res.result.get('ParsedText', '').replace('\r\n', '\n'), markup=False, highlight=False)
 
@@ -895,7 +947,7 @@ def runsShow(run_id: str) -> None:
         if r is None:
             err.print('[red]run not found[/red]')
             raise typer.Exit(1)
-        console.print_json(json.dumps(runToDict(r), default=str))
+        emitJson(runToDict(r))
 
 
 @runs_app.command('purge')
@@ -981,7 +1033,7 @@ def dbIntegrity() -> None:
 def configGet(key: str = typer.Argument('')) -> None:
     s = getSettings().model_dump()
     s.pop('secret_key', None)
-    console.print_json(json.dumps(s if not key else {key: s.get(key)}, default=str))
+    emitJson(s if not key else {key: s.get(key)})
 
 
 @config_app.command('export')

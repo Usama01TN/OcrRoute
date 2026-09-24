@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.5 - 2026-09-23
+
+- **Fix (CLI, all platforms)**: `--json` output piped into a reader that stops early (`| head`) failed the command:
+  exit 1 on Linux/macOS (broken pipe) and an `OSError: [Errno 22]` traceback on Windows, where a closed pipe is
+  reported as EINVAL through colorama. Machine output is now plain UTF-8 JSON written directly to stdout (no Rich
+  console emulation or colour codes), and a closed pipe ends the command quietly with exit 0; real I/O errors are
+  still reported. The frozen entry point forces UTF-8 on Windows consoles.
+- **CI**: the "Verify server binary" step no longer truncates output with `head`. It saves the full JSON,
+  validates it (engine count, Tesseract present), and smoke-tests the frozen server by starting it and checking
+  `/v1/health`.
+
 ## 0.4.4 - 2026-09-23
 
 - **Fix (desktop)**: background results could be lost. `runAsync()` handed workers to Qt's thread pool without

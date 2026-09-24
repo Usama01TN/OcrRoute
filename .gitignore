@@ -7,3 +7,9 @@ dist/
 build/
 *.egg-info/
 .env
+
+# outputs of the CI "Verify server binary" step when run locally
+version.json
+engines.json
+engines.log
+serve.log

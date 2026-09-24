@@ -56,10 +56,33 @@ jobs:
         run: python scripts/build_executable.py --target all --clean ${{ inputs.onefile && '--onefile' || '' }}
       - name: Verify server binary
         shell: bash
+        env:
+          OCRROUTE_HOME: ${{ runner.temp }}/ocrroute-home
+          PYTHONIOENCODING: utf-8
         run: |
-          BIN=$(ls dist/ocrroute-server/ocrroute-server* 2>/dev/null | head -1 || ls dist/ocrroute-server* | head -1)
-          "$BIN" version --json
-          "$BIN" engines list --json | head -c 400; echo
+          set -euo pipefail
+          if [ "${RUNNER_OS}" = "Windows" ]; then BIN="dist/ocrroute-server/ocrroute-server.exe"; else BIN="dist/ocrroute-server/ocrroute-server"; fi
+          test -x "$BIN" || { echo "::error::frozen binary not found at $BIN"; ls -R dist | head -50; exit 1; }
+          # Full output goes to files (never piped into head: a reader that stops early breaks the pipe).
+          "$BIN" version --json > version.json
+          "$BIN" engines list --json > engines.json 2> engines.log
+          python - <<'PY'
+          import json
+          v = json.load(open("version.json", encoding="utf-8"))
+          e = json.load(open("engines.json", encoding="utf-8"))
+          ok = [x for x in e if x["available"]]
+          assert v["name"] == "OcrRoute", v
+          assert len(e) >= 40, f"only {len(e)} engines discovered in the frozen binary"
+          assert any(x["id"] == "Tesseract" for x in e), "Tesseract missing from the frozen binary"
+          print(f"OcrRoute {v['version']}: {len(e)} engines discovered, {len(ok)} importable in this bundle")
+          PY
+          grep -c "Could not import" engines.log | xargs -I{} echo "{} optional engines skipped (missing optional deps, expected)"
+          # Smoke-test the server itself: start, hit /v1/health, stop.
+          "$BIN" serve --port 20299 > serve.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:20299/v1/health > /dev/null 2>&1 && break || sleep 1; done
+          curl -fsS http://127.0.0.1:20299/v1/health | grep -q '"ok"'
+          kill $PID 2>/dev/null || taskkill //PID $PID //F 2>/dev/null || true
       - name: Upload artifacts
         id: upload
         uses: actions/upload-artifact@v4

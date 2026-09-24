@@ -17,4 +17,20 @@ if __name__ == '__main__':
     multiprocessing.freeze_support()
     if len(sys.argv) == 1:
         sys.argv.append('serve')  # double-click on the binary starts the server + panel
-    app()
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles default to a legacy code page
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except (AttributeError, ValueError):
+            pass
+    try:
+        app()
+    except OSError as exc:
+        import errno
+
+        if exc.errno in (errno.EPIPE, errno.EINVAL):  # reader closed the pipe (EINVAL is how Windows says it)
+            try:
+                os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+            except OSError:
+                pass
+            raise SystemExit(0)
+        raise

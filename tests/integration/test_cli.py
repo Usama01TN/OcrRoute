@@ -12,7 +12,7 @@ runner = CliRunner()
 
 def test_cli_version_and_engines(ctx):
     r = runner.invoke(app, ['version', '--json'])
-    assert r.exit_code == 0 and "0.4.4" in r.stdout
+    assert r.exit_code == 0 and "0.4.5" in r.stdout
     r = runner.invoke(app, ['engines', 'list', '--json'])
     assert r.exit_code == 0 and 'FakeOcr' in r.stdout
 
@@ -37,3 +37,49 @@ def test_cli_provider_route_ocr(ctx, sample_png, tmp_path):
 def test_cli_missing_file(ctx, tmp_path):
     r = runner.invoke(app, ['ocr', str(tmp_path / 'nope.png')])
     assert r.exit_code != 0
+
+
+def test_json_output_survives_a_closed_pipe(monkeypatch):
+    """`ocrroute ... --json | head` must exit 0: EPIPE on POSIX, EINVAL (errno 22) on Windows."""
+    import errno
+    import io
+    import sys
+
+    import pytest
+
+    from ocrroute.cli import main as cli
+
+    class ClosedPipe(io.RawIOBase):
+        def __init__(self, err):
+            self.err = err
+
+        def writable(self):
+            return True
+
+        def write(self, b):
+            raise self.err
+
+        def fileno(self):
+            raise OSError('no fd')
+
+    for err in (BrokenPipeError(errno.EPIPE, 'Broken pipe'), OSError(errno.EINVAL, 'Invalid argument')):
+        fake = io.TextIOWrapper(io.BufferedWriter(ClosedPipe(err)), encoding='utf-8')
+        monkeypatch.setattr(sys, 'stdout', fake)
+        with pytest.raises(SystemExit) as exit_info:
+            cli.emitJson([{'id': 'x' * 10000}])
+        assert exit_info.value.code == 0
+    other = OSError(errno.ENOSPC, 'No space left')
+    monkeypatch.setattr(sys, 'stdout', io.TextIOWrapper(io.BufferedWriter(ClosedPipe(other)), encoding='utf-8'))
+    with pytest.raises(OSError):
+        cli.emitJson({'a': 1})  # real I/O errors are still reported
+
+
+def test_json_output_is_plain_utf8(capsys):
+    import json
+
+    from ocrroute.cli import main as cli
+
+    cli.emitJson({'name': 'مرحبا', 'n': 1})
+    out = capsys.readouterr().out
+    assert '\x1b[' not in out  # no ANSI colour codes in machine output
+    assert json.loads(out) == {'name': 'مرحبا', 'n': 1}
