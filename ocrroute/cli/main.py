@@ -458,6 +458,41 @@ def desktop() -> None:
 
 
 # ---------------------------------------------------------------- engines
+@engines_app.command('install')
+def enginesInstall(engine: str = typer.Argument(..., help='Engine id, e.g. EasyOCR, SuryaOcr, MistralOcr'),
+                   as_json: bool = JSON_OPT) -> None:
+    """Install an engine's dependencies with pip and make it available (source installs only)."""
+    from ocrroute.runtime.engineinstall import install, planFor
+
+    ctx = _ctx()
+    info = ctx.registry.get(engine)
+    if info is None:
+        err.print('[red]Unknown engine {}[/red]'.format(engine))
+        raise typer.Exit(2)
+    if info.available:
+        _out({'engine': engine, 'available': True, 'output': 'already available'}, as_json, lambda d: console.print('{} is already available'.format(engine)))
+        return
+    plan = planFor(info.module)
+    if plan is None:
+        err.print('[yellow]No install recipe.[/yellow] {}'.format(info.install_hint))
+        raise typer.Exit(2)
+    if plan['frozen']:
+        _out({'engine': engine, 'available': False, 'installable': False, 'output': plan['hint']}, as_json,
+             lambda d: err.print('[yellow]{}[/yellow]'.format(d['output'])))
+        raise typer.Exit(2)
+    if not as_json:
+        console.print('Installing {} for {} ({})…'.format(', '.join(plan['packages']), engine, plan['size'] or 'small'))
+    result = install(info.module)
+    ctx.registry.discover(force=True)
+    fresh = ctx.registry.get(engine)
+    result['available'] = bool(fresh and fresh.available)
+    _out(result, as_json, lambda d: console.print(('[green]{} is now available.[/green]' if d['available'] else '[red]Install finished but {} is still unavailable.[/red]').format(engine)))
+    if not result['ok'] or not result['available']:
+        if not as_json:
+            err.print(result['output'][-1500:])
+        raise typer.Exit(1)
+
+
 @engines_app.command('list')
 def enginesList(
     kind: str = typer.Option('', help='api|local'), available: bool = typer.Option(False), as_json: bool = JSON_OPT

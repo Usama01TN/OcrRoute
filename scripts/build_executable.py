@@ -68,11 +68,11 @@ def hiddenImports():
     mods = ['uvicorn.logging', 'uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.http.h11_impl',
             'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan.on', 'anyio._backends._asyncio', 'engines',
             'engines.ocrplugin', 'engines.api', 'engines.local', 'AioOCR', 'AioOCR.ocrbase', 'pypdfium2', 'openpyxl',
-            'argon2', 'PIL.Image', 'ocrroute.enginelib_probe', 'faulthandler', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
+            'argon2', 'PIL.Image', 'ocrroute.enginelib_probe', 'ocrroute.runtime.engineinstall', 'mistralai', 'faulthandler', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
     out = []
     for m in mods:
         out += ['--hidden-import', m]
-    for pkg in ('ocrroute.api', 'ocrroute.panel', 'ocrroute.routing', 'ocrroute.pipeline', 'ocrroute.runtime',
+    for pkg in ('mistralai', 'ocrroute.api', 'ocrroute.panel', 'ocrroute.routing', 'ocrroute.pipeline', 'ocrroute.runtime',
                 'ocrroute.cli', 'ocrroute.db', 'ocrroute.tools', 'ocrroute.compat', 'engines.api', 'engines.local'):
         out += ['--collect-submodules', pkg]
     return out

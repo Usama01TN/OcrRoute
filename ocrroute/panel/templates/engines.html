@@ -14,18 +14,26 @@
     {% if e.supports_pdf %}<span class="badge badge-soft">PDF</span>{% endif %}{% if e.supports_handwriting %}<span class="badge badge-soft">{{ _('handwriting') }}</span>{% endif %}{% if e.supports_tables %}<span class="badge badge-soft">{{ _('tables') }}</span>{% endif %}
     <span class="badge badge-soft">{{ e.cost_model }}{% if e.unit_price %} {{ e.unit_price }}¢{% endif %}</span>
   </div>
-  {% if not e.available %}<div class="small mt-2"><code class="user-select-all">{{ e.install_hint }}</code></div>{% endif %}
+  {% if not e.available %}<div class="small mt-2 text-muted">{{ e.install_hint }}</div>{% endif %}
   <div class="small text-muted mt-2">{{ counts.get(e.id, 0) }} {{ _('providers') }} · {{ _('24h success') }} {{ stats[e.id].success_rate ~ '%' if e.id in stats else '-' }} · p50 {{ stats[e.id].avg_ms ~ ' ms' if e.id in stats else '-' }}</div>
   <details class="mt-2"><summary class="small">{{ _('Engine options') }} ({{ e.option_schema|length }})</summary>
   {% if e.option_schema %}<div class="table-responsive mt-2"><table class="table table-sm mb-0 small"><tbody>{% for o in e.option_schema %}<tr><td><code>{{ o.name }}</code></td><td class="text-muted">{{ o.type }}</td><td class="num">{{ o.default }}</td><td class="text-muted">{{ o.description }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
   <div class="small mt-2">{% if e.docs_url %}<a href="{{ e.docs_url }}" target="_blank" rel="noopener">{{ _('docs') }}</a> · {% endif %}<code>{{ e.module }}</code></div></details>
 </div>
-<div class="card-footer bg-transparent d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="/panel/providers#new={{ e.id }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Create provider') }}</a><button class="btn btn-outline-secondary btn-sm probe" data-id="{{ e.id }}" {% if not e.available %}disabled{% endif %}><i class="bi bi-play me-1"></i>{{ _('Probe') }}</button></div>
+<div class="card-footer bg-transparent d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="/panel/providers#new={{ e.id }}"><i class="bi bi-plus-lg me-1"></i>{{ _('Create provider') }}</a><button class="btn btn-outline-secondary btn-sm probe" data-id="{{ e.id }}" {% if not e.available %}disabled{% endif %}><i class="bi bi-play me-1"></i>{{ _('Probe') }}</button>{% if not e.available and installable.get(e.id) %}<button class="btn btn-grad btn-sm install-engine ms-auto" data-id="{{ e.id }}"><i class="bi bi-download me-1"></i>{{ _('Install') }}</button>{% endif %}</div>
 </div></div>{% endfor %}
 </div>
 <dialog id="probe-out"><h2>{{ _('Probe') }}</h2><pre id="probe-pre"></pre><form method="dialog" class="mt-3"><button class="btn btn-outline-secondary">{{ _('Done') }}</button></form></dialog>
 {% endblock %}
 {% block scripts %}<script>
+document.addEventListener("DOMContentLoaded", () => { const {api, toast} = OcrRoute;
+  document.querySelectorAll(".install-engine").forEach(b => b.onclick = async () => {
+    b.disabled = true; const html = b.innerHTML; b.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i>' + (window.I18N.Installing || "Installing…");
+    try { const r = await api("POST", `/v1/engines/${b.dataset.id}/install`); if (r.available) { toast(b.dataset.id + " ✓"); setTimeout(() => location.reload(), 800); } else { toast((r.output || "install failed").slice(-300), true); b.disabled = false; b.innerHTML = html; } }
+    catch (e) { toast(e.message, true); b.disabled = false; b.innerHTML = html; }
+  });
+});
+</script><script>
 document.addEventListener("DOMContentLoaded", () => {
   const {api, toast, $} = OcrRoute;
   $("#refresh").onclick = async () => { try { const r = await api("POST", "/v1/engines/refresh"); toast(`Rescanned: ${r.available} available of ${r.synced}`); location.reload(); } catch (e) { toast(e.message, true); } };

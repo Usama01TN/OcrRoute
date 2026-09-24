@@ -431,6 +431,11 @@ class EngineInfo(object):
                 value = [o.toDict() for o in value]
             result[field] = value
         result['heavy'] = self.heavy
+        from ocrroute.runtime.engineinstall import planFor
+
+        plan = None if self.isAvailable() else planFor(self.getModule())
+        result['installable'] = bool(plan and plan['installable'])
+        result['install_extra'] = plan['extra'] if plan else ''
         return result
 
     # snake_case properties so the rest of the gateway can read the fields like plain attributes
@@ -651,8 +656,16 @@ class EngineRegistry(object):
                     if not err:
                         continue  # imported fine now (e.g. registered by a test) - nothing to report
                     classId = self._classNameHint(join(pkgDir, modName + '.py')) or modName
-                    hint = ('Disabled automatically: a compiled dependency crashes on this CPU/OS. Try reinstalling it '
-                            'from source or another version.') if fullName in enginelib.CRASHED else installHint(err, kind)
+                    from ocrroute.runtime.engineinstall import planFor
+
+                    plan = planFor(fullName)
+                    if fullName in enginelib.CRASHED:
+                        hint = ('Disabled automatically: a compiled dependency crashes on this CPU/OS. Try reinstalling it '
+                                'from source or another version.')
+                    elif plan is not None:
+                        hint = plan['hint']
+                    else:
+                        hint = installHint(err, kind)
                     info = EngineInfo(id=classId, module='AioOCR.engines.{}.{}'.format(kind, modName), kind=kind,
                                       available=False, import_error=err[:500], install_hint=hint)
                     self._applyCurated(info)

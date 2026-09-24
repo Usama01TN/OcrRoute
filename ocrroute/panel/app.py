@@ -295,7 +295,16 @@ def engines(request: Request, db: Session = Depends(getDb), q: str = '', kind: s
     counts: dict[str, int] = {}
     for _pid, eid in db.execute(select(Provider.id, Provider.engine_id)).all():
         counts[eid] = counts.get(eid, 0) + 1
-    return render(request, 'engines.html', 'engines', engines=rows, stats=stats, counts=counts, q=q, kind=kind)
+    from ocrroute.runtime.engineinstall import planFor
+
+    installable = {}
+    for e in rows:
+        if not e.available:
+            info = getContext().registry.get(e.id)
+            plan = planFor(info.module) if info is not None else None
+            installable[e.id] = bool(plan and plan['installable'])
+    return render(request, 'engines.html', 'engines', engines=rows, stats=stats, counts=counts, q=q, kind=kind,
+                  installable=installable)
 
 
 @router.get('/providers', response_class=HTMLResponse)

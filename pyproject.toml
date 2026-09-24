@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
-version = "0.4.8"
+version = "0.4.9"
 description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
 readme = "README.md"
 license = { text = "MIT" }
@@ -19,17 +19,29 @@ classifiers = [
 dependencies = [
   "fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.5", "pydantic-settings>=2.1",
   "sqlalchemy>=2.0", "alembic>=1.13", "typer>=0.9", "rich>=13", "structlog>=24",
-  "cryptography>=42", "python-multipart>=0.0.9", "jinja2>=3.1", "itsdangerous>=2.1",
+  "cryptography>=42,<49; sys_platform == 'darwin' and platform_machine == 'x86_64'", "cryptography>=42; sys_platform != 'darwin' or platform_machine != 'x86_64'", "python-multipart>=0.0.9", "jinja2>=3.1", "itsdangerous>=2.1",
   "argon2-cffi>=23", "httpx>=0.26", "requests>=2.31", "pillow>=10", "numpy>=1.24",
   "openpyxl>=3.1", "prometheus-client>=0.19", "pypdfium2>=4.20",
 ]
 
 [project.optional-dependencies]
-api = ["requests>=2.31"]
+# Cloud engine SDKs (light, pure Python; bundled in the stand-alone executables)
+api = ["requests>=2.31", "mistralai>=1.0"]
+# Classic local engines (bundled in the stand-alone executables)
 local = ["pytesseract>=0.3.10", "opencv-python-headless>=4.8"]
-vlm = ["torch", "transformers>=4.40", "accelerate"]
+# Deep-learning engines: one extra per engine family. Install only what you use; they are not bundled in the
+# stand-alone executables (PyTorch / TensorFlow / PaddlePaddle add several GB and pin conflicting versions).
+easyocr = ["easyocr>=1.7"]
+surya = ["surya-ocr>=0.17"]
+transformers = ["transformers>=4.45", "torch>=2.4", "accelerate>=0.33"]  # GlmOcrHF and other Hugging Face engines
+olmocr = ["olmocr>=0.4", "transformers>=4.45", "torch>=2.4", "pypdf>=4"]
+paddle = ["paddleocr>=3.0", "paddlepaddle>=3.0"]
+calamari = ["calamari-ocr>=2.3", "tensorflow>=2.15"]
+keras = ["keras-ocr>=0.9"]  # legacy: needs TensorFlow and numpy<2 (imgaug); use a separate environment
+vlm = ["ocrroute[transformers]"]
+torch = ["ocrroute[easyocr,surya,transformers]"]
 desktop = ["PyQt5>=5.15", "keyring>=24"]
-all = ["ocrroute[api,local,vlm,desktop]"]
+all = ["ocrroute[api,local,desktop]"]
 dev = ["pytest>=8", "pytest-cov", "respx>=0.20", "ruff", "black", "mypy", "types-requests"]
 
 [project.scripts]

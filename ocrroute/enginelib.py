@@ -160,11 +160,35 @@ modules.setdefault('AioOCR.engines.api', engines.api)
 modules.setdefault('AioOCR.engines.local', engines.local)
 modules.setdefault('AioOCR.engines.ocrplugin', engines.ocrplugin)
 
+import io as _io  # noqa: E402
 import sys as _sys  # noqa: E402
 from contextlib import redirect_stdout as _redirectStdout  # noqa: E402
 
-with _redirectStdout(_sys.stderr):  # AioOCR prints import warnings with print(); keep stdout clean for --json
-    import AioOCR  # noqa: E402  (runs the library's own plugin discovery)
+IMPORT_WARNINGS = []  # AioOCR's "Could not import ..." lines; the Engines page shows the same facts per engine
+
+
+def _captureWarnings(fn):
+    """Run ``fn`` with stdout captured: AioOCR reports missing optional dependencies with print()."""
+    buf = _io.StringIO()
+    with _redirectStdout(buf):
+        fn()
+    lines = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
+    del IMPORT_WARNINGS[:]
+    IMPORT_WARNINGS.extend(lines)
+    import os as _os
+
+    if _os.environ.get('OCRROUTE_VERBOSE_DISCOVERY'):  # opt-in: echo them to stderr like AioOCR does
+        for ln in lines:
+            _sys.stderr.write(ln + '\n')
+
+
+def _importAioOcr():
+    global AioOCR
+    import AioOCR  # noqa: F811  (runs the library's own plugin discovery)
+
+
+AioOCR = None
+_captureWarnings(_importAioOcr)
 from AioOCR.engines.ocrplugin import OCRError, OCRPlugin, is_url  # noqa: E402
 from AioOCR.ocrbase import OcrBase  # noqa: E402
 
@@ -217,8 +241,7 @@ def rediscover():
                 pass
     discover = getattr(AioOCR, '_discoverOcrPlugins', None)
     if discover is not None:
-        with _redirectStdout(_sys.stderr):
-            discover()
+        _captureWarnings(discover)
     else:  # pragma: no cover - very old library layout
         import_module('AioOCR')
     return AioOCR.AVAILABLE_PLUGINS

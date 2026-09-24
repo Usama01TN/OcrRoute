@@ -45,6 +45,13 @@ metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`)
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
 
+## More engines
+
+The executables include every engine that needs no deep-learning framework (49 of 56, including Tesseract, RapidOCR,
+Mistral OCR and all cloud engines). The PyTorch / TensorFlow / PaddlePaddle engines install on demand in a pip
+installation: click **Install** in the Engines page, or `ocrroute engines install EasyOCR`, or
+`pip install "ocrroute[easyocr]"`. See `docs/ENGINES.md`.
+
 ## Stand-alone executables
 
 `python scripts/build_executable.py` builds two PyInstaller bundles - `ocrroute-server` (CLI + API + web panel;

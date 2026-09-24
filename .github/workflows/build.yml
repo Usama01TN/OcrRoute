@@ -50,9 +50,20 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install tesseract --no-progress -y || echo "tesseract optional"
       - name: Install project
+        shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[local,desktop,dev]" pyinstaller
+          # --only-binary for packages with native code: never compile them from source on the runner. A source
+          # build of cryptography links the runner's OpenSSL, which clashes with the libssl bundled from Python
+          # ("Symbol not found: _SSL_get0_group_name" on macOS x86_64). pip picks the newest version with a wheel.
+          pip install --prefer-binary --only-binary=cryptography,cffi,pydantic-core,argon2-cffi-bindings,numpy,pillow \
+            -e ".[api,local,desktop,dev]" pyinstaller
+          python - <<'PY'
+          import cryptography, platform, sys
+          print("cryptography", cryptography.__version__, "on", sys.platform, platform.machine())
+          import cryptography.hazmat.bindings._rust  # noqa: F401  (must import cleanly before freezing)
+          import mistralai  # noqa: F401  (Mistral OCR is bundled)
+          PY
       - name: Smoke test
         env: { QT_QPA_PLATFORM: offscreen }
         run: pytest -q tests/unit
@@ -105,12 +116,15 @@ jobs:
           assert v["name"] == "OcrRoute", v
           assert len(e) >= 40, f"only {len(e)} engines discovered in the frozen binary"
           assert any(x["id"] == "Tesseract" for x in e), "Tesseract missing from the frozen binary"
+          mistral = next((x for x in e if x["id"] == "MistralOcr"), None)
+          assert mistral and mistral["available"], f"MistralOcr must be bundled: {mistral and mistral['import_error']}"
           print(f"OcrRoute {v['version']}: {len(e)} engines discovered, {len(ok)} importable in this bundle")
+          missing = [x["id"] for x in e if not x["available"] and "crashed the interpreter" not in (x.get("import_error") or "")]
+          print(f"{len(missing)} deep-learning engines not bundled by design (pip extras): {', '.join(missing)}")
           if crashed:
               print(f"::warning::{len(crashed)} engine(s) disabled because a compiled dependency crashed on this runner: {', '.join(crashed)}")
           PY
           [ $? -eq 0 ] || exit 1
-          echo "$(grep -c 'Could not import' engines.err || true) optional engines skipped (missing optional deps, expected)"
           # Smoke-test the server itself: start, hit /v1/health, stop.
           "$BIN" serve --port 20299 > serve.log 2>&1 &
           PID=$!

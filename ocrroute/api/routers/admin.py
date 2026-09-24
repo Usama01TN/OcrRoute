@@ -63,7 +63,13 @@ def audit(
 
 # ---------------------------------------------------------------- engines
 def engineToDict(e: Engine) -> dict[str, Any]:
-    return {c.name: getattr(e, c.name) for c in Engine.__table__.columns}
+    d = {c.name: getattr(e, c.name) for c in Engine.__table__.columns}
+    from ocrroute.runtime.engineinstall import planFor
+
+    plan = None if e.available else planFor(e.module or '')
+    d['installable'] = bool(plan and plan['installable'])
+    d['install_extra'] = plan['extra'] if plan else ''
+    return d
 
 
 @router.get('/engines')
@@ -128,6 +134,39 @@ def patchEngine(
     audit(db, request, key, 'engine.update', 'engine', engine_id, body)
     db.commit()
     return engineToDict(e)
+
+
+@router.post('/engines/{engine_id}/install')
+def installEngine(engine_id: str, request: Request, db: Session = Depends(getDb), key: ApiKey = Depends(manage),
+                  ctx: AppContext = Depends(getCtx)):
+    """
+    Install the pip dependencies of an unavailable engine into the running environment, then re-run discovery so
+    the engine is usable immediately (no restart). Not possible inside the stand-alone executables.
+    """
+    from ocrroute.db.repo.engines import seedProviders, syncEngines
+    from ocrroute.runtime.engineinstall import install, planFor
+
+    info = ctx.registry.get(engine_id)
+    if info is None:
+        raise NotFound('engine not found')
+    if info.available:
+        return {'ok': True, 'output': 'already available', 'available': True, 'engine': info.toDict()}
+    plan = planFor(info.module)
+    if plan is None:
+        raise BadInput('No install recipe for {}. Hint: {}'.format(engine_id, info.install_hint))
+    result = install(info.module)
+    if result['ok']:
+        ctx.registry.discover(force=True)
+        syncEngines(db, ctx.registry)
+        if ctx.settings.auto_seed_providers:
+            seedProviders(db, ctx.registry)
+    fresh = ctx.registry.get(engine_id) or info
+    db.add(AuditLog(actor=key.name, action='engine.install', target_type='engine', target_id=engine_id,
+                    detail={'ok': result['ok'], 'packages': result.get('packages', [])},
+                    ip=request.client.host if request.client else ''))
+    db.commit()
+    result.update({'available': bool(fresh.available), 'engine': fresh.toDict(), 'plan': plan})
+    return result
 
 
 @router.post('/engines/{engine_id}/probe')

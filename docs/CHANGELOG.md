@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.9 - 2026-09-24
+
+- **Fix (macOS x86_64 executable)**: the frozen server failed with `Symbol not found: _SSL_get0_group_name`.
+  cryptography 49+ publishes no macOS x86_64 wheel, so pip compiled it from source against the runner's newer
+  OpenSSL, while the bundle carried the older `libssl.3.dylib` from Python. Intel Macs now use cryptography 48.x (the
+  last universal2 wheel, which links OpenSSL statically; environment marker in `pyproject.toml`), and CI installs
+  native packages from wheels only (`--only-binary`) and checks that cryptography imports before freezing.
+- **Mistral OCR bundled**: `mistralai` added to the `api` extra and to the executables (49 of 56 engines built in).
+- **Deep-learning engines install on demand**: per-engine extras (`easyocr`, `surya`, `transformers`, `olmocr`,
+  `paddle`, `calamari`, `keras`), an **Install** button on the Engines page, `POST /v1/engines/{id}/install` and
+  `ocrroute engines install <engine>`. Installation runs pip in OcrRoute's environment and hot-reloads the engine
+  (no restart). PEP 668 (OS-managed Python) is detected and explained; `OCRROUTE_PIP_ARGS` is an explicit opt-in.
+  In the executables these engines explain that they are not bundled and how to get them.
+- AioOCR's "Could not import" console messages are captured (shown per engine in the UI; `OCRROUTE_VERBOSE_DISCOVERY=1`
+  prints them). The CI verify step asserts Mistral OCR is bundled and lists the engines that are not, by design.
+
 ## 0.4.8 - 2026-09-24
 
 - **CI fix**: the "Verify server binary" step still exited silently on failure. GitHub runs step scripts with
