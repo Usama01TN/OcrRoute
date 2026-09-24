@@ -29,6 +29,9 @@ def run(modules):
         pass
     if root and root not in sys.path:
         sys.path.insert(0, root)
+    import os
+
+    os.environ.setdefault('TORCHVISION_WARN_WHEN_EXTENSION_LOADING_FAILS', '1')  # surface swallowed load errors
     failed = 0
     for name in modules:
         try:

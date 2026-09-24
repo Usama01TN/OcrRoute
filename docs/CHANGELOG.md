@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 - 2026-09-24
+
+- **Fix (Full edition, EasyOCR)**: the frozen self-test reported `RuntimeError: operator torchvision::nms does not
+  exist`. torchvision 0.29 renamed its compiled extension to `_C_stable` / `image_stable` and loads it *by path*
+  (`torch.ops.load_library`), so neither PyInstaller's analysis nor the community hook (which still lists
+  `torchvision._C`) collected it, and torchvision silently swallows the load failure. The build now collects every
+  native file of torchvision, plus the vendored `torchvision.libs/` (Linux) and `.dylibs/` (macOS) libraries, at
+  their original relative paths, so the extensions' `$ORIGIN`-relative library paths keep working.
+- The frozen self-test sets `TORCHVISION_WARN_WHEN_EXTENSION_LOADING_FAILS=1`, so any remaining extension load
+  error is printed with its real cause instead of the generic "operator does not exist".
+
 ## 0.5.1 - 2026-09-24
 
 - **Fix (Full edition)**: EasyOCR was bundled but failed to import inside the executables. EasyOCR imports

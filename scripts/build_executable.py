@@ -99,6 +99,60 @@ def installed(dist):
         return False
 
 
+NATIVE_SUFFIXES = ('.so', '.pyd', '.dll', '.dylib')
+
+
+def isNative(fileName):
+    """
+    :param fileName: str
+    :return: bool  shared library or extension module (``x.so``, ``x.so.13``, ``x.pyd``, ``x.dll``, ``x.dylib``)
+    """
+    return fileName.endswith(NATIVE_SUFFIXES) or '.so.' in fileName
+
+
+def nativeFiles(package):
+    """
+    Every native file of ``package`` with the destination that keeps its relative location in the bundle, plus the
+    sibling ``<package>.libs`` folder that Linux wheels (auditwheel) use for vendored libraries.
+
+    Needed for packages that load extensions *by path* rather than by import: torchvision >= 0.29 loads
+    ``_C_stable`` through ``torch.ops.load_library``, which neither PyInstaller's analysis nor the (older) community
+    hook listing ``torchvision._C`` can see, and ``collect_dynamic_libs`` skips ``.pyd`` files and ``_C_stable.so``.
+
+    :param package: str
+    :return: list[tuple[str, str]]  (source file, destination directory inside the bundle)
+    """
+    from importlib.util import find_spec
+
+    spec = find_spec(package)
+    if spec is None or not spec.submodule_search_locations:
+        return []
+    pkgDir = list(spec.submodule_search_locations)[0]
+    site = os.path.dirname(pkgDir)
+    out = []
+    for folder in (pkgDir, os.path.join(site, package + '.libs')):
+        if not os.path.isdir(folder):
+            continue
+        for dirPath, _dirs, files in os.walk(folder):
+            for f in files:
+                if isNative(f):
+                    rel = os.path.relpath(dirPath, site)
+                    out.append((os.path.join(dirPath, f), rel))
+    return sorted(out)
+
+
+def nativeArgs(package):
+    """
+    :param package: str
+    :return: list[str]  --add-binary arguments for ``nativeFiles(package)``
+    """
+    sep = ';' if platform.system() == 'Windows' else ':'
+    args = []
+    for src, dest in nativeFiles(package):
+        args += ['--add-binary', '{}{}{}'.format(src, sep, dest)]
+    return args
+
+
 def editionArgs(edition):
     """
     :param edition: str  lean | full
@@ -117,6 +171,7 @@ def editionArgs(edition):
     for dist in FULL_METADATA:
         if installed(dist):
             out += ['--copy-metadata', dist]
+    out += nativeArgs('torchvision')  # _C_stable / image_stable and their vendored libraries, at their own paths
     return out
 
 
@@ -193,10 +248,12 @@ def selftest(binary):
     if not wanted:
         return
     print('frozen self-test:', ', '.join(wanted), flush=True)
-    r = subprocess.run([binary, '--ocrroute-selftest', ','.join(wanted)], capture_output=True, text=True, timeout=900)
+    env = dict(os.environ, TORCHVISION_WARN_WHEN_EXTENSION_LOADING_FAILS='1')  # print why an extension did not load
+    r = subprocess.run([binary, '--ocrroute-selftest', ','.join(wanted)], capture_output=True, text=True, timeout=900,
+                       env=env)
     print(r.stdout[-20000:], flush=True)
     if r.returncode != 0:
-        tail = '\n'.join(r.stderr.splitlines()[-40:])
+        tail = '\n'.join(ln for ln in r.stderr.splitlines() if 'extension' in ln.lower() or 'error' in ln.lower())[-6000:]
         raise SystemExit('frozen self-test failed ({} module(s)); the bundle is incomplete.\n{}'.format(
             r.stdout.count('SELFTEST FAIL'), tail))
 

@@ -75,3 +75,28 @@ def test_selftest_reports_each_module(capsys):
     assert failed == 1
     assert 'SELFTEST OK   json' in out and 'SELFTEST FAIL definitely_not_a_module_xyz' in out
     assert 'ModuleNotFoundError' in out  # full traceback, not just a flag
+
+
+def test_native_files_collects_extensions_loaded_by_path(tmp_path, monkeypatch):
+    """torchvision >= 0.29 loads _C_stable by path; its files and <pkg>.libs must be collected at their own paths."""
+    import importlib
+    import os
+    import sys
+
+    site = tmp_path / 'site'
+    pkg = site / 'fakevision'
+    (pkg / '.dylibs').mkdir(parents=True)
+    (site / 'fakevision.libs').mkdir()
+    for f in ('__init__.py', '_C_stable.so', 'image_stable.pyd', 'jpeg8.dll', '.dylibs/libz.1.dylib', 'readme.txt'):
+        (pkg / f).write_text('x')
+    (site / 'fakevision.libs' / 'libpng16.abc12345.so.16').write_text('x')
+    monkeypatch.syspath_prepend(str(site))
+    importlib.invalidate_caches()
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+    import build_executable as b
+
+    got = {(os.path.basename(src), dest) for src, dest in b.nativeFiles('fakevision')}
+    assert got == {('_C_stable.so', 'fakevision'), ('image_stable.pyd', 'fakevision'), ('jpeg8.dll', 'fakevision'),
+                   ('libz.1.dylib', os.path.join('fakevision', '.dylibs')),
+                   ('libpng16.abc12345.so.16', 'fakevision.libs')}
+    assert b.nativeFiles('package_that_does_not_exist_xyz') == []
