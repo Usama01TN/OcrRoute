@@ -172,6 +172,7 @@ def editionArgs(edition):
         if installed(dist):
             out += ['--copy-metadata', dist]
     out += nativeArgs('torchvision')  # _C_stable / image_stable and their vendored libraries, at their own paths
+    out += nativeArgs('paddle')  # paddle/libs (MKL, oneDNN...) at the exact path Paddle registers at runtime
     return out
 
 
@@ -219,6 +220,7 @@ def build(target, onefile, clean, edition='lean'):
             cmd += ['--osx-bundle-identifier', 'io.ocrroute.desktop']
     else:
         cmd += ['--console', '--exclude-module', 'PyQt5']
+    cmd += ['--runtime-hook', join(ROOT, 'scripts', 'pyi_rth_ocrroute_site.py')]  # site paths point at the bundle
     cmd += editionArgs(edition) + editionMarker(edition)
     cmd += dataArgs() + hiddenImports() + [entry]
     print(' '.join(cmd))
@@ -242,8 +244,8 @@ def selftest(binary):
 
     with open(join(ROOT, 'build', 'edition.json')) as fh:
         engines = json.load(fh).get('bundled_extra_engines', [])
-    modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy'],
-               'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib']}
+    modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy', 'torch:compute', 'torchvision:ops'],
+               'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib', 'paddle:compute']}
     wanted = [m for e in engines for m in modules.get(e, [])]
     if not wanted:
         return

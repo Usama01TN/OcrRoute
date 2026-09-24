@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.3 - 2026-09-24
+
+- **Fix (Full edition, PaddleOCR on Linux)**: `libmklml_intel.so: cannot open shared object file`. Paddle finds its
+  native libraries through `site.getsitepackages()` and `FLAGS_mklml_dir`; in a frozen app both pointed at the
+  build machine. A PyInstaller runtime hook (`scripts/pyi_rth_ocrroute_site.py`) now puts the bundle first in the
+  site paths and exports `FLAGS_mklml_dir` for the bundled `paddle/libs`, which is collected at its exact path.
+- **Fix (Full edition, PaddleOCR on macOS x86_64)**: `import paddle` crashed with `TypeError: sequence item 0:
+  expected str instance` because Paddle 3.0 joins `site.USER_SITE`, which PyInstaller sets to `None`. The runtime
+  hook gives it a real path.
+- **Fix (PaddleOCR on Windows)**: `ConvertPirAttribute2RuntimeAttribute not support`, a Paddle 3.3 bug in its oneDNN
+  (MKLDNN) CPU executor. OcrRoute defaults `PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT` to off; set it to `True` to opt in.
+- **Self-test runs real computations**: a Paddle CPU run, a PyTorch matrix product and a torchvision NMS operator,
+  in addition to imports (the MKL failure imported fine and only broke when computing).
+- **CLI**: `ocrroute ocr` keeps stdout for the result; engine chatter (EasyOCR's download progress bar) goes to stderr.
+
 ## 0.5.2 - 2026-09-24
 
 - **Fix (Full edition, EasyOCR)**: the frozen self-test reported `RuntimeError: operator torchvision::nms does not

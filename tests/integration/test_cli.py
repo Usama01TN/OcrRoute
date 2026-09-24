@@ -12,7 +12,7 @@ runner = CliRunner()
 
 def test_cli_version_and_engines(ctx):
     r = runner.invoke(app, ['version', '--json'])
-    assert r.exit_code == 0 and "0.5.2" in r.stdout
+    assert r.exit_code == 0 and "0.5.3" in r.stdout
     r = runner.invoke(app, ['engines', 'list', '--json'])
     assert r.exit_code == 0 and 'FakeOcr' in r.stdout
 

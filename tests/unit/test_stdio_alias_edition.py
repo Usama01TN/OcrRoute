@@ -100,3 +100,31 @@ def test_native_files_collects_extensions_loaded_by_path(tmp_path, monkeypatch):
                    ('libz.1.dylib', os.path.join('fakevision', '.dylibs')),
                    ('libpng16.abc12345.so.16', 'fakevision.libs')}
     assert b.nativeFiles('package_that_does_not_exist_xyz') == []
+
+
+def test_runtime_hook_points_site_and_mkl_at_the_bundle(tmp_path, monkeypatch):
+    """Paddle 3.0 crashed on site.USER_SITE=None; Paddle 3.3 could not find libmklml_intel.so in the bundle."""
+    import os
+    import runpy
+    import site
+    import sys
+
+    (tmp_path / 'paddle' / 'libs').mkdir(parents=True)
+    monkeypatch.setattr(sys, '_MEIPASS', str(tmp_path), raising=False)
+    monkeypatch.setattr(site, 'USER_SITE', None)
+    monkeypatch.setattr(site, 'getsitepackages', lambda *a: ['/build/machine/site-packages'])
+    monkeypatch.delenv('FLAGS_mklml_dir', raising=False)
+    hook = os.path.join(os.path.dirname(__file__), '..', '..', 'scripts', 'pyi_rth_ocrroute_site.py')
+    runpy.run_path(hook)
+    assert site.getsitepackages()[0] == str(tmp_path)  # the bundle is searched first
+    assert site.USER_SITE == str(tmp_path)  # never None: Paddle 3.0 joins it without checking
+    assert os.environ['FLAGS_mklml_dir'] == os.path.join(str(tmp_path), 'paddle', 'libs')
+    assert os.path.sep.join([site.USER_SITE, 'paddle', 'libs'])  # the exact expression that crashed
+
+
+def test_mkldnn_is_off_by_default():
+    import os
+
+    from ocrroute import enginelib  # noqa: F401
+
+    assert os.environ.get('PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT') in ('False', 'false', '0', 'True', 'true', '1')

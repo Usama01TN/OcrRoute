@@ -175,6 +175,13 @@ if _safeDiscoveryEnabled():
         _sys.modules[_name] = None
         _sys.modules['AioOCR.' + _name] = None
 
+import os as _envOs  # noqa: E402
+
+# PaddlePaddle 3.3's oneDNN (MKLDNN) executor rejects some PaddleOCR models on CPU ("ConvertPirAttribute2Runtime
+# Attribute not support [pir::ArrayAttribute...]"). Default PaddleX's documented switch to off; set
+# PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT=True to opt back in once Paddle fixes it.
+_envOs.environ.setdefault('PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT', 'False')
+
 from ocrroute import opencv_alias as _metadataAlias  # noqa: E402
 
 _metadataAlias.install()  # headless OpenCV satisfies libraries that check for the GUI distribution name

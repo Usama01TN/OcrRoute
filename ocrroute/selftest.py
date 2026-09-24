@@ -15,6 +15,33 @@ import sys
 import traceback
 
 
+def _paddleCompute():
+    """Run Paddle's own installation check: a real CPU computation that loads its native math libraries (MKL,
+    oneDNN), which an import alone does not."""
+    import paddle
+
+    paddle.utils.run_check()
+
+
+def _torchCompute():
+    import torch
+
+    a = torch.ones(64, 64)
+    assert float((a @ a).sum()) == 64.0 ** 3
+
+
+def _torchvisionOps():
+    import torch
+    import torchvision
+
+    boxes = torch.tensor([[0.0, 0.0, 10.0, 10.0], [1.0, 1.0, 11.0, 11.0]])
+    keep = torchvision.ops.nms(boxes, torch.tensor([0.9, 0.8]), 0.5)  # a compiled torchvision operator
+    assert keep.tolist() == [0]
+
+
+CHECKS = {'paddle:compute': _paddleCompute, 'torch:compute': _torchCompute, 'torchvision:ops': _torchvisionOps}
+
+
 def run(modules):
     """
     :param modules: list[str]
@@ -35,7 +62,10 @@ def run(modules):
     failed = 0
     for name in modules:
         try:
-            importlib.import_module(name)
+            if name in CHECKS:
+                CHECKS[name]()
+            else:
+                importlib.import_module(name)
             print('SELFTEST OK   {}'.format(name), flush=True)
         except BaseException:  # noqa: BLE001 - report everything, including SystemExit from broken packages
             failed += 1

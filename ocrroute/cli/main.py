@@ -341,7 +341,10 @@ def ocr(
         prompt=prompt,
         origin='cli',
     )
-    res = ctx.executor.execute(req)
+    from contextlib import redirect_stdout
+
+    with redirect_stdout(sys.stderr):  # engines print progress (EasyOCR's model download); stdout = result only
+        res = ctx.executor.execute(req)
     if res.status not in ('succeeded', 'cached'):
         err.print('[red]{}[/red]: {}'.format(res.error_code, res.error_message))
         for a in res.routing.get('attempts', []):
