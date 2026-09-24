@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.8 - 2026-09-24
+
+- **CI fix**: the "Verify server binary" step still exited silently on failure. GitHub runs step scripts with
+  `bash -e`, and `set -uo pipefail` does not disable `-e`, so a failing command ended the script before `check()`
+  could read its exit code and print logs. The step now starts with `set +e -u -o pipefail`.
+- **CI diagnostic**: the step first runs the engine-import probe directly (non-fatal) and reports how far imports
+  get; if the interpreter dies, it names the module being imported. Probe output is included in the uploaded logs.
+
 ## 0.4.7 - 2026-09-24
 
 - **Crash-isolated engine discovery**: a compiled dependency that crashes the interpreter on import (segfault or

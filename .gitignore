@@ -17,3 +17,5 @@ version.out
 version.err
 engines.out
 engines.err
+probe.out
+probe.err

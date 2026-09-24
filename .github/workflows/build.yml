@@ -65,7 +65,9 @@ jobs:
           PYTHONIOENCODING: utf-8
           PYTHONFAULTHANDLER: "1"
         run: |
-          set -uo pipefail   # no -e: every command reports its own failure with logs
+          # GitHub runs this with `bash -e`; turn -e OFF so check() can capture a failure and print its logs
+          # (with -e, a failing command ends the script before its exit code can be read).
+          set +e -u -o pipefail
           if [ "${RUNNER_OS}" = "Windows" ]; then BIN="dist/ocrroute-server/ocrroute-server.exe"; else BIN="dist/ocrroute-server/ocrroute-server"; fi
           echo "runner: ${RUNNER_OS} $(uname -m) | binary: $BIN"
           [ "${RUNNER_OS}" = "macOS" ] && { sw_vers || true; file "$BIN" || true; }
@@ -81,6 +83,16 @@ jobs:
               exit 1
             fi
           }
+          # Diagnostic (never fails the step): import every engine module in a child process, as the crash-isolated
+          # discovery does, and report how far it gets. If the interpreter dies, the last START names the culprit.
+          "$BIN" --ocrroute-probe-engines > probe.out 2> probe.err; prc=$?
+          if grep -q '^DONE' probe.out; then
+            echo "engine import probe: all $(grep -c '^END ' probe.out) modules imported without crashing"
+          else
+            last=$(grep '^START ' probe.out | tail -n 1 | cut -d' ' -f2)
+            echo "::warning::engine import probe died (exit $prc) while importing: ${last:-<before any engine>}"
+            echo "----- probe stderr (last 40 lines) -----"; tail -n 40 probe.err
+          fi
           # Full output goes to files (never piped into head: a reader that stops early breaks the pipe).
           check version "$BIN" version --json
           check engines "$BIN" engines list --json
@@ -117,6 +129,8 @@ jobs:
           path: |
             *.out
             *.err
+            probe.out
+            probe.err
             serve.log
             ${{ runner.temp }}/ocrroute-home/cache/*.json
           if-no-files-found: ignore
