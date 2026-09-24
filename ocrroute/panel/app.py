@@ -2,11 +2,11 @@
 """Control panel: server-rendered Jinja2 + HTMX shell. Interactive parts call the /v1 API with the session."""
 from __future__ import absolute_import, division, print_function
 
-from typing import Any
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from ocrroute import i18n
 from ocrroute.api.deps import getDb
 from ocrroute.config import Settings
 from ocrroute.crypto import loadOrCreateKey
@@ -27,7 +28,6 @@ from ocrroute.routing import strategies
 from ocrroute.runtime.context import getContext
 from ocrroute.runtime.doctor import report, toMarkdown
 from ocrroute.tools import getToolRegistry
-from ocrroute import i18n
 from ocrroute.version import __version__
 
 HERE = Path(__file__).parent

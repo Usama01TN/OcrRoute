@@ -4,6 +4,7 @@ Candidate model shared by strategies, the router and the simulator.
 """
 from __future__ import absolute_import, division, print_function
 
+
 class RequestContext(object):
     """
     Facts about the incoming request that influence routing.

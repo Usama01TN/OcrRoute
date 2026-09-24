@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
-version = "0.4.2"
+version = "0.4.3"
 description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
 readme = "README.md"
 license = { text = "MIT" }
@@ -52,7 +52,21 @@ quote-style = "single"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501", "B008", "B904", "UP007"]
+ignore = [
+  "E501",   # long lines are allowed (line-length is advisory)
+  "B008",   # FastAPI Depends() in defaults is the framework idiom
+  "B904",   # raise-from is replaced by py23.raiseFrom (Python 2/3 syntax)
+  "B905",   # zip(strict=) is Python 3.10+ only
+  # The project deliberately keeps AioOCR's Python 2/3-compatible style (see docs/DECISIONS.md #15 and #18):
+  "UP004",  # class X(object)
+  "UP008",  # super(Class, self)
+  "UP009",  # "# coding=utf-8" header
+  "UP010",  # from __future__ import absolute_import, division, print_function
+  "UP025",  # u"" literals
+  "UP031",  # "%" formatting
+  "UP032",  # "".format() instead of f-strings
+  "UP007", "UP045",  # Optional[...] in framework-read annotations
+]
 
 [tool.mypy]
 python_version = "3.10"

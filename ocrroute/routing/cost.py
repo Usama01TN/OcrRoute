@@ -2,6 +2,7 @@
 """Cost estimation and accounting in USD cents."""
 from __future__ import absolute_import, division, print_function
 
+
 def estimateCents(cost_model, unit_price, pages=1, chars=0, requests=1):
     if cost_model in ('free', 'local'):
         return 0.0

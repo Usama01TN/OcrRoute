@@ -4,8 +4,18 @@ Endpoints page: where the gateway is reachable, tunnels, public URL and the glob
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QFrame, QHBoxLayout, QLabel, QLineEdit, QPlainTextEdit,
-                             QPushButton, QVBoxLayout, QWidget)
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ocrroute.desktop.pages.base import Page, cardTitle
 

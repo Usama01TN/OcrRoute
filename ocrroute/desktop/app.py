@@ -5,10 +5,10 @@ from __future__ import absolute_import, division, print_function
 import sys
 from pathlib import Path
 
-from PyQt5.QtCore import QCoreApplication, QLocale, QSize, Qt, QTimer, QTranslator
-from PyQt5.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap
+from PyQt5.QtCore import QCoreApplication, QSize, Qt, QTimer
+from PyQt5.QtGui import QColor, QIcon, QKeySequence, QPixmap
 from PyQt5.QtNetwork import QLocalServer, QLocalSocket
-from PyQt5.QtWidgets import (QScrollArea, QSizePolicy, QSplitter, 
+from PyQt5.QtWidgets import (
     QAction,
     QApplication,
     QHBoxLayout,
@@ -17,6 +17,9 @@ from PyQt5.QtWidgets import (QScrollArea, QSizePolicy, QSplitter,
     QListWidgetItem,
     QMainWindow,
     QMenu,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
     QStackedWidget,
     QStatusBar,
     QSystemTrayIcon,
@@ -24,13 +27,13 @@ from PyQt5.QtWidgets import (QScrollArea, QSizePolicy, QSplitter,
     QWidget,
 )
 
+from ocrroute.desktop import i18n as desktopI18n
+from ocrroute.desktop import icons
 from ocrroute.desktop.pages.dashboard import DashboardPage
 from ocrroute.desktop.pages.endpoints import EndpointsPage
 from ocrroute.desktop.pages.misc import DoctorPage, SettingsPage, ToolsPage
 from ocrroute.desktop.pages.scan import ScanPage
 from ocrroute.desktop.pages.tables import BatchPage, EnginesPage, HistoryPage, ProvidersPage, RoutesPage
-from ocrroute.desktop import i18n as desktopI18n
-from ocrroute.desktop import icons
 from ocrroute.desktop.state import AppState
 from ocrroute.version import __version__
 

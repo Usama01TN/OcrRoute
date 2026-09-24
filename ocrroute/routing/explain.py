@@ -4,6 +4,7 @@ Routing trace returned beside the OCR result.
 """
 from __future__ import absolute_import, division, print_function
 
+
 class RoutingTrace(object):
     """
     Accumulates the routing decisions and attempts of one run.

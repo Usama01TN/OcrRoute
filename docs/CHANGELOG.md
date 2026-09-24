@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3 - 2026-09-23
+
+- **CI lint passes**: ruff's pyupgrade rules that contradict the project's Python 2/3-compatible style (`(object)`,
+  `super(Class, self)`, `# coding=utf-8`, `from __future__`, `.format()`) are disabled in `pyproject.toml` with the
+  reason documented next to each; import order, unused imports and whitespace fixed across the tree.
+- **Fix**: ngrok authentication. A default `authenticate()` had been placed inside the `Ngrok` class and shadowed
+  the real implementation, so authtokens were rejected. It now lives in the `Tunnel` base class (regression test added).
+
 ## 0.4.2 - 2026-09-23
 
 - **Charts follow the theme in real time**: colours are Chart.js scriptable options evaluated at draw time, every

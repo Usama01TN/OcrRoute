@@ -8,8 +8,8 @@ replaces the lookups that relied on ``import_module('__init__')`` and ``sys.path
 """
 from __future__ import absolute_import, division, print_function
 
-from ocrroute.enginelib import AioOCR, OCRPlugin
 from ocrroute.catalog.registry import getRegistry
+from ocrroute.enginelib import AioOCR, OCRPlugin
 from ocrroute.logsetup import getLogger
 
 log = getLogger(__name__)

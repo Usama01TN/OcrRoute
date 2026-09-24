@@ -3,7 +3,6 @@
 from __future__ import absolute_import, division, print_function
 
 import base64
-from ocrroute.compat.py23 import raiseFrom
 import hashlib
 import io
 import ipaddress
@@ -14,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 from PIL import Image
 
+from ocrroute.compat.py23 import raiseFrom
 from ocrroute.errors import BadInput, TooLarge, UnsupportedInput
 
 Image.MAX_IMAGE_PIXELS = None  # we enforce our own limit

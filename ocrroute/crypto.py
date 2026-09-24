@@ -3,7 +3,6 @@
 from __future__ import absolute_import, division, print_function
 
 import base64
-from ocrroute.compat.py23 import raiseFrom
 import hashlib
 import hmac
 import os
@@ -12,6 +11,8 @@ import secrets
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from cryptography.fernet import Fernet, InvalidToken
+
+from ocrroute.compat.py23 import raiseFrom
 
 _ph = PasswordHasher()
 

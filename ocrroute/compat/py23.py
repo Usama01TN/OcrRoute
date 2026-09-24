@@ -17,17 +17,17 @@ if PY2:  # pragma: no cover
     binary_type = str
     string_types = (str, unicode)  # noqa: F821
     integer_types = (int, long)  # noqa: F821
-    from urlparse import urlparse, urljoin  # noqa: F401
-    from Queue import Queue, Empty  # noqa: F401
+    from Queue import Empty, Queue  # noqa: F401
     from StringIO import StringIO  # noqa: F401
+    from urlparse import urljoin, urlparse  # noqa: F401
 else:
     text_type = str
     binary_type = bytes
     string_types = (str,)
     integer_types = (int,)
-    from urllib.parse import urlparse, urljoin  # noqa: F401
-    from queue import Queue, Empty  # noqa: F401
     from io import StringIO  # noqa: F401
+    from queue import Empty, Queue  # noqa: F401
+    from urllib.parse import urljoin, urlparse  # noqa: F401
 
 
 def iteritems(d):

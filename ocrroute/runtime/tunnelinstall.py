@@ -136,7 +136,7 @@ def _version(path):
     try:
         r = subprocess.run([path, '--version' if 'cloudflared' in path else 'version'], capture_output=True, text=True, timeout=20)
         return (r.stdout or r.stderr).strip()
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         return ''
 
 

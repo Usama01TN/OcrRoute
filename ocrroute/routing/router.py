@@ -10,11 +10,11 @@ from sqlalchemy.orm import selectinload
 
 from ocrroute.db.models import Engine, Provider, Route
 from ocrroute.db.repo.stats import providerRecentConfidence, providerRecentLatency
-from ocrroute.routing.templates import AUTO_TEMPLATES, applyFilter, isAutoRoute
 from ocrroute.errors import NoCandidate, NotFound
 from ocrroute.routing import strategies
 from ocrroute.routing.candidates import Candidate, filterCandidates
 from ocrroute.routing.cost import estimateCents
+from ocrroute.routing.templates import AUTO_TEMPLATES, applyFilter, isAutoRoute
 from ocrroute.runtime.limits import IN_FLIGHT, WINDOW
 
 

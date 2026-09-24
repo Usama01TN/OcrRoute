@@ -4,7 +4,6 @@ from __future__ import absolute_import, division, print_function
 
 from ocrroute.pipeline.export import alto, csvxlsx, docx, hocr, markdown, plain, searchable_pdf
 
-
 WRITERS = {
     'json': (plain.writeJson, 'application/json', '.json'),
     'text': (plain.write_text, 'text/plain; charset=utf-8', '.txt'),

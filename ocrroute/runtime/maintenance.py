@@ -5,9 +5,9 @@ from __future__ import absolute_import, division, print_function
 import shutil
 import sqlite3
 import threading
-from time import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import time
 
 from sqlalchemy import text
 

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (QSizePolicy, 
+from PyQt5.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (QSizePolicy,
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -26,8 +27,8 @@ from PyQt5.QtWidgets import (QSizePolicy,
     QWidget,
 )
 
-from ocrroute.desktop.pages.base import Page, fmtMs
 from ocrroute.desktop import icons
+from ocrroute.desktop.pages.base import Page, fmtMs
 from ocrroute.desktop.widgets.image_viewer import ImageViewer
 from ocrroute.desktop.widgets.region_capture import RegionCapture
 

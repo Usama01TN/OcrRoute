@@ -6,7 +6,6 @@ import random
 
 from ocrroute.routing.candidates import Candidate, RequestContext  # noqa: F401  (documented contract types)
 
-
 _REGISTRY = {}
 DESCRIPTIONS = {}
 

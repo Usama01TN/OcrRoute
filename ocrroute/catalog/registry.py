@@ -12,7 +12,8 @@ from importlib import import_module
 from inspect import getdoc, getsource
 from os.path import dirname, exists, join
 from pkgutil import iter_modules
-from re import M, compile as reCompile, finditer, fullmatch, search, sub
+from re import M, finditer, fullmatch, search, sub
+from re import compile as reCompile
 from threading import Lock, RLock
 
 from ocrroute import enginelib

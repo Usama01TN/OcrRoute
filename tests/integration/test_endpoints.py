@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function
 
 import pathlib
 
-from ocrroute.runtime.endpoints import EndpointManager, Tunnel, localAddresses
+from ocrroute.runtime.endpoints import Tunnel, localAddresses
 
 
 def test_local_addresses_are_ipv4_without_loopback():
@@ -71,3 +71,13 @@ def test_no_em_dash_in_project_files():
         if p.suffix in ('.py', '.html', '.md', '.json', '.toml', '.yml', '.css', '.js', '.qss', '.txt') and '\u2014' in p.read_text(encoding='utf-8', errors='ignore'):
             offenders.append(str(p.relative_to(root)))
     assert offenders == []
+
+
+def test_each_tunnel_keeps_its_own_authenticate():
+    """Regression: a default authenticate() once landed inside Ngrok and shadowed the real one."""
+    from ocrroute.runtime.endpoints import Cloudflare, Ngrok, Tailscale
+
+    assert Ngrok.authenticate is not Tunnel.authenticate
+    assert Tailscale.authenticate is not Tunnel.authenticate
+    assert Cloudflare.authenticate is Tunnel.authenticate
+    assert 'authtoken is required' in Ngrok().authenticate('')['output']

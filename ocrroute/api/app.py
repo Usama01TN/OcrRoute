@@ -6,10 +6,10 @@ FastAPI binds request, body, form and dependency parameters from annotations, so
 """
 from __future__ import absolute_import, division, print_function
 
-from collections.abc import Awaitable, Callable
-from typing import Any
 import time
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
 from ocrroute.api.routers import admin, endpoints, jobs, ocr, runs, system, tools, users
-from ocrroute.config import FORBIDDEN_PORTS, Settings, getSettings
+from ocrroute.config import FORBIDDEN_PORTS, getSettings
 from ocrroute.errors import OcrRouteError, RateLimited
 from ocrroute.logsetup import getLogger, redact
 from ocrroute.runtime.context import buildContext, getContext

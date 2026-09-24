@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from ocrroute.api.deps import getDb
 from ocrroute.api.security import ROLE_SCOPES, requireKey
 from ocrroute.crypto import hashPassword, verifyPassword
-from ocrroute.db.base import utcnow
 from ocrroute.db.models import ApiKey, AuditLog, User
 from ocrroute.errors import BadInput, Conflict, Forbidden, NotFound
 

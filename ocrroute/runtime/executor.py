@@ -3,13 +3,12 @@
 from __future__ import absolute_import, division, print_function
 
 import concurrent.futures as cf
-from ocrroute.compat.py23 import raiseFrom
 import hashlib
 import threading
 import time
 from pathlib import Path
 
-
+from ocrroute.compat.py23 import raiseFrom
 from ocrroute.db.base import utcnow
 from ocrroute.db.models import Artifact, Attempt, Credential, Provider, Run
 from ocrroute.db.session import sessionScope

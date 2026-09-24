@@ -49,7 +49,8 @@ def ctx():
     from ocrroute.runtime.context import buildContext
 
     c = buildContext()
-    from fixtures.fakeocr import FakeOcr, FakeAuthFail, FakeEmpty, FakeSlow, FakeUnavailable
+    from fixtures.fakeocr import FakeAuthFail, FakeEmpty, FakeOcr, FakeSlow, FakeUnavailable
+
     from ocrroute.db.repo.engines import syncEngines
     from ocrroute.db.session import sessionScope
 

@@ -189,6 +189,15 @@ class Tunnel(object):
         """
         return ''
 
+    def authenticate(self, token):
+        """
+        Provider-specific authentication (ngrok token, tailscale login).
+
+        :param token: str
+        :return: dict  {ok, output, login_url}
+        """
+        return {'ok': False, 'output': '{} does not take a token'.format(self.title), 'login_url': ''}
+
     def stop(self):
         """
         Terminate the tunnel process.
@@ -301,15 +310,6 @@ class Ngrok(Tunnel):
             pass
         return ''
 
-
-    def authenticate(self, token):
-        """
-        Provider-specific authentication (ngrok token, tailscale login).
-
-        :param token: str
-        :return: dict  {ok, output, login_url}
-        """
-        return {'ok': False, 'output': '{} does not take a token'.format(self.title), 'login_url': ''}
 
 
 class EndpointManager(object):

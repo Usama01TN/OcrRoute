@@ -4,6 +4,7 @@ None
 """
 from __future__ import absolute_import, division, print_function
 
+
 def writeMd(result, meta):
     lines = result.get('TextOverlay', {}).get('Lines', [])
     out = []
