@@ -68,7 +68,7 @@ def hiddenImports():
     mods = ['uvicorn.logging', 'uvicorn.loops.auto', 'uvicorn.protocols.http.auto', 'uvicorn.protocols.http.h11_impl',
             'uvicorn.protocols.websockets.auto', 'uvicorn.lifespan.on', 'anyio._backends._asyncio', 'engines',
             'engines.ocrplugin', 'engines.api', 'engines.local', 'AioOCR', 'AioOCR.ocrbase', 'pypdfium2', 'openpyxl',
-            'argon2', 'PIL.Image', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
+            'argon2', 'PIL.Image', 'ocrroute.enginelib_probe', 'faulthandler', 'pytesseract', 'structlog', 'prometheus_client', 'sqlalchemy.dialects.sqlite']
     out = []
     for m in mods:
         out += ['--hidden-import', m]

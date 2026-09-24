@@ -63,30 +63,63 @@ jobs:
         env:
           OCRROUTE_HOME: ${{ runner.temp }}/ocrroute-home
           PYTHONIOENCODING: utf-8
+          PYTHONFAULTHANDLER: "1"
         run: |
-          set -euo pipefail
+          set -uo pipefail   # no -e: every command reports its own failure with logs
           if [ "${RUNNER_OS}" = "Windows" ]; then BIN="dist/ocrroute-server/ocrroute-server.exe"; else BIN="dist/ocrroute-server/ocrroute-server"; fi
+          echo "runner: ${RUNNER_OS} $(uname -m) | binary: $BIN"
+          [ "${RUNNER_OS}" = "macOS" ] && { sw_vers || true; file "$BIN" || true; }
           test -x "$BIN" || { echo "::error::frozen binary not found at $BIN"; ls -R dist | head -50; exit 1; }
+          check() {  # check <name> <cmd...>: run, keep stdout/stderr in files, explain any failure
+            local name="$1"; shift
+            "$@" > "$name.out" 2> "$name.err"; local rc=$?
+            if [ $rc -ne 0 ]; then
+              local why="exit code $rc"; [ $rc -gt 128 ] && why="$why (killed by signal $((rc - 128)): $(kill -l $((rc - 128)) 2>/dev/null || echo '?'))"
+              echo "::error::'$*' failed: $why"
+              echo "----- stderr of $name (last 80 lines) -----"; tail -n 80 "$name.err"
+              echo "----- stdout of $name (first 40 lines) -----"; head -n 40 "$name.out"
+              exit 1
+            fi
+          }
           # Full output goes to files (never piped into head: a reader that stops early breaks the pipe).
-          "$BIN" version --json > version.json
-          "$BIN" engines list --json > engines.json 2> engines.log
+          check version "$BIN" version --json
+          check engines "$BIN" engines list --json
           python - <<'PY'
           import json
-          v = json.load(open("version.json", encoding="utf-8"))
-          e = json.load(open("engines.json", encoding="utf-8"))
+          v = json.load(open("version.out", encoding="utf-8"))
+          e = json.load(open("engines.out", encoding="utf-8"))
           ok = [x for x in e if x["available"]]
+          crashed = [x["id"] for x in e if "crashed the interpreter" in (x.get("import_error") or "")]
           assert v["name"] == "OcrRoute", v
           assert len(e) >= 40, f"only {len(e)} engines discovered in the frozen binary"
           assert any(x["id"] == "Tesseract" for x in e), "Tesseract missing from the frozen binary"
           print(f"OcrRoute {v['version']}: {len(e)} engines discovered, {len(ok)} importable in this bundle")
+          if crashed:
+              print(f"::warning::{len(crashed)} engine(s) disabled because a compiled dependency crashed on this runner: {', '.join(crashed)}")
           PY
-          grep -c "Could not import" engines.log | xargs -I{} echo "{} optional engines skipped (missing optional deps, expected)"
+          [ $? -eq 0 ] || exit 1
+          echo "$(grep -c 'Could not import' engines.err || true) optional engines skipped (missing optional deps, expected)"
           # Smoke-test the server itself: start, hit /v1/health, stop.
           "$BIN" serve --port 20299 > serve.log 2>&1 &
           PID=$!
-          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:20299/v1/health > /dev/null 2>&1 && break || sleep 1; done
-          curl -fsS http://127.0.0.1:20299/v1/health | grep -q '"ok"'
+          for i in $(seq 1 90); do curl -fsS http://127.0.0.1:20299/v1/health > /dev/null 2>&1 && break; kill -0 $PID 2>/dev/null || break; sleep 1; done
+          if ! curl -fsS http://127.0.0.1:20299/v1/health | grep -q '"ok"'; then
+            echo "::error::frozen server did not become healthy"; echo "----- serve.log -----"; tail -n 120 serve.log
+            kill $PID 2>/dev/null || true; exit 1
+          fi
+          echo "frozen server healthy on :20299"
           kill $PID 2>/dev/null || taskkill //PID $PID //F 2>/dev/null || true
+      - name: Upload verify logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-logs-${{ matrix.label }}
+          path: |
+            *.out
+            *.err
+            serve.log
+            ${{ runner.temp }}/ocrroute-home/cache/*.json
+          if-no-files-found: ignore
       - name: Upload artifacts
         id: upload
         uses: actions/upload-artifact@v4

@@ -36,6 +36,120 @@ if not exists(AIOOCR_ROOT):  # installed as a package: fall back to whatever ``i
 if AIOOCR_ROOT not in path:
     path.insert(0, AIOOCR_ROOT)
 
+
+# ---- crash-isolated discovery ---------------------------------------------------------------------------------
+# AioOCR catches Python exceptions per engine module, but a compiled dependency that crashes the interpreter
+# (segfault / illegal instruction in a wheel built for another CPU) would take the whole gateway down with no
+# message. When enabled (frozen builds by default, or OCRROUTE_SAFE_DISCOVERY=1), engine imports are first probed
+# in a child process; modules that crash it are blocked in sys.modules so AioOCR skips them like any missing
+# dependency. The result is cached per bundle, Python version and CPU architecture.
+CRASHED = {}  # module name -> explanation
+
+
+def _safeDiscoveryEnabled():
+    import os as _os
+    import sys as _s
+
+    flag = _os.environ.get('OCRROUTE_SAFE_DISCOVERY', '')
+    if flag in ('0', 'false', 'no'):
+        return False
+    return flag in ('1', 'true', 'yes') or bool(getattr(_s, 'frozen', False))
+
+
+def _probeCommand():
+    import sys as _s
+
+    if getattr(_s, 'frozen', False):
+        return [_s.executable, '--ocrroute-probe-engines']
+    return [_s.executable, '-c', 'from ocrroute.enginelib_probe import main; main()']
+
+
+def _probeSignature():
+    import hashlib
+    import platform
+    import sys as _s
+
+    from ocrroute import enginelib_probe as _p
+    from ocrroute.version import __version__
+
+    parts = [__version__, _s.version, platform.machine(), _s.platform, str(getattr(_s, 'frozen', False))]
+    for name in _p.moduleNames(AIOOCR_ROOT):
+        sub, mod = name.split('.')[1:]
+        path = join(AIOOCR_ROOT, 'engines', sub, mod + '.py')
+        try:
+            from os.path import getmtime
+
+            parts.append('{}:{}'.format(name, int(getmtime(path))))
+        except OSError:
+            parts.append(name)
+    return hashlib.sha1('|'.join(parts).encode('utf-8')).hexdigest()[:16]
+
+
+def probeCrashingModules(maxRounds=12, timeout=300):
+    """
+    :return: dict[str, str]  modules that crash the interpreter when imported, with an explanation
+    """
+    import json
+    import os as _os
+    import subprocess
+
+    from ocrroute import enginelib_probe as _p
+
+    cachePath = ''
+    try:
+        from ocrroute.config import getSettings
+
+        cacheDir = join(str(getSettings().home), 'cache')
+        _os.makedirs(cacheDir, exist_ok=True)
+        cachePath = join(cacheDir, 'engine-probe-{}.json'.format(_probeSignature()))
+        if exists(cachePath):
+            with open(cachePath) as fh:
+                return json.load(fh)
+    except Exception:  # noqa: BLE001 - the cache is an optimisation only
+        cachePath = ''
+    crashed = {}
+    for _round in range(maxRounds):
+        env = dict(_os.environ, **{_p.SKIP_ENV: ','.join(crashed), 'OCRROUTE_SAFE_DISCOVERY': '0'})
+        try:
+            r = subprocess.run(_probeCommand(), env=env, capture_output=True, text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            break  # a hang is not a crash; let normal discovery proceed
+        lines = r.stdout.splitlines()
+        if r.returncode == 0 and 'DONE' in lines:
+            break
+        started = [ln[6:] for ln in lines if ln.startswith('START ')]
+        ended = set(ln[4:] for ln in lines if ln.startswith('END '))
+        culprit = next((m for m in reversed(started) if m not in ended), None)
+        if not culprit:
+            break  # the probe itself failed before importing engines; do not guess
+        code = r.returncode
+        why = 'signal {}'.format(-code) if code < 0 else 'exit code {}'.format(code)
+        errLines = [ln.strip() for ln in r.stderr.splitlines() if ln.strip()]
+        tail = [ln for ln in errLines if ln.startswith('Fatal Python error')][:1] or \
+            [ln for ln in errLines if not ln.startswith(('Extension modules', 'Current thread', 'Thread 0x', 'File '))][-1:]
+        crashed[culprit] = 'crashed the interpreter while importing on this platform ({}){}'.format(
+            why, (': ' + ' | '.join(tail))[:300] if tail else '')
+        _sys.stderr.write('Warning: engine module {} {}; it is disabled.\n'.format(culprit, crashed[culprit]))
+    if cachePath:
+        try:
+            with open(cachePath, 'w') as fh:
+                json.dump(crashed, fh)
+        except OSError:
+            pass
+    return crashed
+
+
+import sys as _sys  # noqa: E402
+
+if _safeDiscoveryEnabled():
+    try:
+        CRASHED.update(probeCrashingModules())
+    except Exception as _exc:  # noqa: BLE001 - never block startup because of the probe itself
+        _sys.stderr.write('Warning: crash-isolated engine discovery skipped: {}\n'.format(_exc))
+    for _name in CRASHED:  # blocked modules raise ImportError, which AioOCR already handles
+        _sys.modules[_name] = None
+        _sys.modules['AioOCR.' + _name] = None
+
 import engines  # noqa: E402  (AioOCR/engines, as the library expects)
 import engines.api  # noqa: E402
 import engines.local  # noqa: E402

@@ -13,3 +13,7 @@ version.json
 engines.json
 engines.log
 serve.log
+version.out
+version.err
+engines.out
+engines.err

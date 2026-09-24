@@ -49,3 +49,10 @@ GitHub retired the `macos-13` image on 2025-12-04; a job requesting a retired la
 "Waiting for a runner to pick up this job" indefinitely. Intel builds use `macos-15-intel`, which GitHub describes as
 its last x86_64 macOS image (announced as available until August 2027). When it is retired, remove the
 `macos-x86_64` matrix entry: Apple silicon Macs run the arm64 build natively.
+
+### Crash-isolated engine discovery
+
+Frozen builds probe engine imports in a child process on first start. A module whose native dependency crashes the
+interpreter is disabled (shown in the Engines page with the signal) instead of crashing the gateway. Force it on for
+a pip install with `OCRROUTE_SAFE_DISCOVERY=1`, or off with `OCRROUTE_SAFE_DISCOVERY=0`. Results are cached in
+`~/.ocrroute/cache/engine-probe-*.json`; delete that file after changing installed packages to probe again.

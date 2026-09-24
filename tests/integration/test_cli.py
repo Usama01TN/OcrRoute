@@ -12,7 +12,7 @@ runner = CliRunner()
 
 def test_cli_version_and_engines(ctx):
     r = runner.invoke(app, ['version', '--json'])
-    assert r.exit_code == 0 and "0.4.6" in r.stdout
+    assert r.exit_code == 0 and "0.4.7" in r.stdout
     r = runner.invoke(app, ['engines', 'list', '--json'])
     assert r.exit_code == 0 and 'FakeOcr' in r.stdout
 
@@ -83,3 +83,27 @@ def test_json_output_is_plain_utf8(capsys):
     out = capsys.readouterr().out
     assert '\x1b[' not in out  # no ANSI colour codes in machine output
     assert json.loads(out) == {'name': 'مرحبا', 'n': 1}
+
+
+def test_engine_probe_isolates_a_native_crash(tmp_path):
+    """A module whose native code kills the interpreter is identified in a child process and blocked, not fatal."""
+    import os
+    import subprocess
+    import sys
+
+    env = dict(os.environ, OCRROUTE_HOME=str(tmp_path / 'home'), OCRROUTE_SAFE_DISCOVERY='1',
+               OCRROUTE_PROBE_CRASH='engines.local.tesseract', PYTHONPATH=os.getcwd())
+    code = ('from ocrroute import enginelib; from ocrroute.catalog import getRegistry; r = getRegistry(); '
+            't = r.get("Tesseract"); import json; '
+            'print(json.dumps({"crashed": list(enginelib.CRASHED), "available": t.available, "err": t.import_error, '
+            '"n": len(r.available())}))')
+    out = subprocess.run([sys.executable, '-c', code], env=env, capture_output=True, text=True, timeout=240)
+    assert out.returncode == 0, out.stderr[-800:]
+    import json
+
+    res = json.loads(out.stdout.strip().splitlines()[-1])
+    assert res['crashed'] == ['engines.local.tesseract']
+    assert res['available'] is False and 'crashed the interpreter' in res['err']
+    assert res['n'] >= 40  # every other engine still loads
+    cache = list((tmp_path / 'home' / 'cache').glob('engine-probe-*.json'))
+    assert len(cache) == 1 and 'engines.local.tesseract' in cache[0].read_text()

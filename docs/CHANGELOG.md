@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.7 - 2026-09-24
+
+- **Crash-isolated engine discovery**: a compiled dependency that crashes the interpreter on import (segfault or
+  illegal instruction in a wheel built for another CPU) used to take the whole gateway down without a message,
+  because it happens below Python where AioOCR's per-engine error handling cannot help. Frozen builds (and any
+  install with `OCRROUTE_SAFE_DISCOVERY=1`) now probe engine imports in a child process first; a crashing module
+  is disabled with the exact reason (for example "signal 11") and an explanation in the Engines page, and every
+  other engine keeps working. The probe runs once per bundle, Python version and CPU architecture (cached in
+  `~/.ocrroute/cache`). `faulthandler` is enabled in frozen builds, so native crashes print a Python stack.
+- **CI**: the "Verify server binary" step explains every failure (command, exit code, signal name, stderr and
+  stdout), warns when an engine was disabled by the probe, prints the server log when the health check fails, and
+  uploads all logs as a `verify-logs-<platform>` artifact. Fixed `grep -c` failing the step when it counted zero.
+
 ## 0.4.6 - 2026-09-23
 
 - **CI**: the macOS Intel build requested the retired `macos-13` runner label and queued forever. It now uses

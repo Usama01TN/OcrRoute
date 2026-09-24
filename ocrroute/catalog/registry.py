@@ -646,12 +646,15 @@ class EngineRegistry(object):
                 for _finder, modName, isPkg in iter_modules([pkgDir]):
                     if isPkg or modName.startswith('_') or modName in importedModules:
                         continue
-                    err = self._importError('engines.{}.{}'.format(kind, modName))
+                    fullName = 'engines.{}.{}'.format(kind, modName)
+                    err = enginelib.CRASHED.get(fullName) or self._importError(fullName)
                     if not err:
                         continue  # imported fine now (e.g. registered by a test) - nothing to report
                     classId = self._classNameHint(join(pkgDir, modName + '.py')) or modName
+                    hint = ('Disabled automatically: a compiled dependency crashes on this CPU/OS. Try reinstalling it '
+                            'from source or another version.') if fullName in enginelib.CRASHED else installHint(err, kind)
                     info = EngineInfo(id=classId, module='AioOCR.engines.{}.{}'.format(kind, modName), kind=kind,
-                                      available=False, import_error=err[:500], install_hint=installHint(err, kind))
+                                      available=False, import_error=err[:500], install_hint=hint)
                     self._applyCurated(info)
                     found.setdefault(classId, info)
             found.update(self.__m_registered)
