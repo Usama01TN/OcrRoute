@@ -21,7 +21,6 @@ on:
 
 permissions:
   contents: write
-
 jobs:
   build:
     name: ${{ matrix.platform.label }} (${{ matrix.edition }})
