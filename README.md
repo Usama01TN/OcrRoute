@@ -60,7 +60,7 @@ options, one-click provider creation and a probe button.
 ## Several servers:
 
 Run one **leader** and any number of **followers**: followers mirror the leader's providers, credentials, routes,
-API keys and users. See `docs/CLUSTER.md`.
+API keys and users. Set it up from the web panel (**System > Cluster sync**) or with `.env`; see `docs/CLUSTER.md`.
 
 ## Editions and more engines:
 
