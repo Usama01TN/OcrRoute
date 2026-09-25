@@ -4,7 +4,7 @@ None
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import QObject, QSettings, pyqtSignal
+from ManyQt.QtCore import QObject, QSettings, Signal
 
 from ocrroute.desktop.client import OcrRouteClient
 
@@ -12,11 +12,11 @@ from ocrroute.desktop.client import OcrRouteClient
 class AppState(QObject):
     """Connection + settings shared by all pages."""
 
-    connected = pyqtSignal(str)  # base url
-    disconnected = pyqtSignal(str)  # reason
-    toast = pyqtSignal(str, bool)  # message, is_error
-    themeChanged = pyqtSignal(str)  # light | dark | system
-    languageChanged = pyqtSignal(str)  # language code
+    connected = Signal(str)  # base url
+    disconnected = Signal(str)  # reason
+    toast = Signal(str, bool)  # message, is_error
+    themeChanged = Signal(str)  # light | dark | system
+    languageChanged = Signal(str)  # language code
 
     def __init__(self):
         super(AppState, self).__init__()

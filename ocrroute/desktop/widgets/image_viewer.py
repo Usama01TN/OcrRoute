@@ -2,9 +2,9 @@
 """QGraphicsView with zoom/pan, word/line overlay boxes, hover tooltips and a crop (region) tool."""
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt5.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
-from PyQt5.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsView
+from ManyQt.QtCore import QPointF, QRectF, Qt, Signal
+from ManyQt.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
+from ManyQt.QtWidgets import QGraphicsRectItem, QGraphicsScene, QGraphicsView
 
 ACCENT = QColor(245, 180, 0)
 INK = QColor(27, 34, 48)
@@ -32,8 +32,8 @@ class _WordItem(QGraphicsRectItem):
 
 
 class ImageViewer(QGraphicsView):
-    wordClicked = pyqtSignal(int)  # line index
-    regionSelected = pyqtSignal(int, int, int, int)
+    wordClicked = Signal(int)  # line index
+    regionSelected = Signal(int, int, int, int)
 
     def __init__(self, parent=None):
         super(ImageViewer, self).__init__(parent)

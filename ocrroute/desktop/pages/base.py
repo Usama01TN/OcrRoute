@@ -4,8 +4,8 @@ None
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from ManyQt.QtCore import Qt
+from ManyQt.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from ocrroute.desktop.workers import runAsync
 

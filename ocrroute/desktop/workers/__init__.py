@@ -4,13 +4,13 @@ from __future__ import absolute_import, division, print_function
 
 import traceback
 
-from PyQt5.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
+from ManyQt.QtCore import QObject, QRunnable, QThreadPool, Signal
 
 
 class _Signals(QObject):
-    result = pyqtSignal(object)
-    error = pyqtSignal(str, str)  # short message, detail
-    finished = pyqtSignal()
+    result = Signal(object)
+    error = Signal(str, str)  # short message, detail
+    finished = Signal()
 
 
 class Worker(QRunnable):

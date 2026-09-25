@@ -482,11 +482,11 @@ def batch(
 
 @app.command()
 def desktop() -> None:
-    """Launch the PyQt5 desktop application."""
+    """Launch the desktop application (ManyQt: PyQt5, PyQt6, PySide2 or PySide6)."""
     try:
         from ocrroute.desktop.app import main
     except ImportError as exc:
-        err.print('[red]PyQt5 is not installed:[/red] {}\nInstall with: pip install ocrroute[desktop]'.format(exc))
+        err.print('[red]ManyQt or a Qt binding is not installed:[/red] {}\nInstall with: pip install ocrroute[desktop]'.format(exc))
         raise typer.Exit(2)
     raise SystemExit(main())
 

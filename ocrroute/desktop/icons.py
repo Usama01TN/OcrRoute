@@ -5,9 +5,9 @@ recolour with the theme (no binary assets in the repository).
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import QByteArray, QRectF, Qt
-from PyQt5.QtGui import QIcon, QPainter, QPixmap
-from PyQt5.QtSvg import QSvgRenderer
+from ManyQt.QtCore import QByteArray, QRectF, Qt
+from ManyQt.QtGui import QIcon, QPainter, QPixmap
+from ManyQt.QtSvg import QSvgRenderer
 
 _PATHS = {
     'dashboard': 'M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z',

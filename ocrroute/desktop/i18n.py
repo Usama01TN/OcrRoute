@@ -7,7 +7,7 @@ desktop app share one vocabulary and one set of catalogue files.
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import QLocale, Qt, QTranslator
+from ManyQt.QtCore import QLocale, Qt, QTranslator
 
 from ocrroute import i18n
 

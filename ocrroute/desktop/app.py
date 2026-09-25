@@ -5,10 +5,10 @@ from __future__ import absolute_import, division, print_function
 import sys
 from pathlib import Path
 
-from PyQt5.QtCore import QCoreApplication, QSize, Qt, QTimer
-from PyQt5.QtGui import QColor, QIcon, QKeySequence, QPixmap
-from PyQt5.QtNetwork import QLocalServer, QLocalSocket
-from PyQt5.QtWidgets import (
+from ManyQt.QtCore import QCoreApplication, QSize, Qt, QTimer
+from ManyQt.QtGui import QColor, QIcon, QKeySequence, QPixmap
+from ManyQt.QtNetwork import QLocalServer, QLocalSocket
+from ManyQt.QtWidgets import (
     QAction,
     QApplication,
     QHBoxLayout,

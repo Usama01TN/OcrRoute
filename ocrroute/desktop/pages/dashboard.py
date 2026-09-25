@@ -4,9 +4,9 @@ None
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtGui import QColor, QPainter, QPen
-from PyQt5.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QVBoxLayout, QWidget
+from ManyQt.QtCore import Qt, QTimer
+from ManyQt.QtGui import QColor, QPainter, QPen
+from ManyQt.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QVBoxLayout, QWidget
 
 from ocrroute.desktop.pages.base import Page, fmtMs
 

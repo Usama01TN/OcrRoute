@@ -5,7 +5,7 @@ from __future__ import absolute_import, division, print_function
 import socket
 import time
 
-from PyQt5.QtCore import QThread, pyqtSignal
+from ManyQt.QtCore import QThread, Signal
 
 
 def freePort():
@@ -15,8 +15,8 @@ def freePort():
 
 
 class EmbeddedServer(QThread):
-    ready = pyqtSignal(str, str)  # base_url, api_key
-    failed = pyqtSignal(str)
+    ready = Signal(str, str)  # base_url, api_key
+    failed = Signal(str)
 
     def __init__(self, port=None):
         super(EmbeddedServer, self).__init__()

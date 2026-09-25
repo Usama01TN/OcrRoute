@@ -2,7 +2,7 @@
 """Tools (reserved empty state), Settings and Doctor pages."""
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtWidgets import (
+from ManyQt.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,

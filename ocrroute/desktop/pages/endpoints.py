@@ -4,7 +4,7 @@ Endpoints page: where the gateway is reachable, tunnels, public URL and the glob
 """
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtWidgets import (
+from ManyQt.QtWidgets import (
     QApplication,
     QCheckBox,
     QFrame,
@@ -114,7 +114,7 @@ class EndpointsPage(Page):
         self._clear(self.__m_localBox)
         head = QLabel('{} · {}'.format(self.tr('Running'), ep['server_id']))
         head.setObjectName('pillOk')
-        from PyQt5.QtCore import Qt
+        from ManyQt.QtCore import Qt
 
         self.__m_localBox.addWidget(head, 0, Qt.AlignLeft)
         for u in ep['local']:

@@ -2,14 +2,14 @@
 """Frameless translucent full-screen rubber-band grabber: select a screen region, get PNG bytes back."""
 from __future__ import absolute_import, division, print_function
 
-from PyQt5.QtCore import QBuffer, QIODevice, QPoint, QRect, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QGuiApplication, QPainter, QPen
-from PyQt5.QtWidgets import QWidget
+from ManyQt.QtCore import QBuffer, QIODevice, QPoint, QRect, Qt, Signal
+from ManyQt.QtGui import QColor, QGuiApplication, QPainter, QPen
+from ManyQt.QtWidgets import QWidget
 
 
 class RegionCapture(QWidget):
-    captured = pyqtSignal(bytes)
-    cancelled = pyqtSignal()
+    captured = Signal(bytes)
+    cancelled = Signal()
 
     def __init__(self):
         super(RegionCapture, self).__init__(None, Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)

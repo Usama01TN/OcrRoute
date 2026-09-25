@@ -5,8 +5,8 @@ from __future__ import absolute_import, division, print_function
 import json
 from pathlib import Path
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
+from ManyQt.QtCore import Qt
+from ManyQt.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -215,7 +215,7 @@ class ScanPage(Page):
         if img.isNull():
             self.state.toast.emit(self.tr('Clipboard has no image'), True)
             return
-        from PyQt5.QtCore import QBuffer, QIODevice
+        from ManyQt.QtCore import QBuffer, QIODevice
 
         buf = QBuffer()
         buf.open(QIODevice.WriteOnly)
