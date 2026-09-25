@@ -302,11 +302,17 @@ def build(target, onefile, clean, edition='lean'):
     if clean:
         cmd.append('--clean')
     if target == 'desktop':
-        cmd += ['--windowed', '--collect-submodules', 'ocrroute.desktop', '--hidden-import', 'PyQt5.QtSvg']
+        # ManyQt picks its Qt binding at runtime (QT_API), so PyInstaller cannot see which one the app needs: bundle
+        # ManyQt and exactly the PyQt5 modules it maps to, and keep the other bindings out of the bundle.
+        cmd += ['--windowed', '--collect-submodules', 'ocrroute.desktop', '--collect-submodules', 'ManyQt']
+        for mod in ('QtCore', 'QtGui', 'QtWidgets', 'QtSvg', 'QtNetwork'):
+            cmd += ['--hidden-import', 'PyQt5.' + mod]
+        for other in ('PyQt4', 'PyQt6', 'PySide', 'PySide2', 'PySide6'):
+            cmd += ['--exclude-module', other]
         if platform.system() == 'Darwin':
             cmd += ['--osx-bundle-identifier', 'io.ocrroute.desktop']
     else:
-        cmd += ['--console', '--exclude-module', 'PyQt5']
+        cmd += ['--console', '--exclude-module', 'PyQt5', '--exclude-module', 'ManyQt']
     cmd += ['--runtime-hook', join(ROOT, 'scripts', 'pyi_rth_ocrroute_site.py')]  # site paths point at the bundle
     cmd += editionArgs(edition) + editionMarker(edition)
     cmd += dataArgs() + hiddenImports() + [entry]
@@ -317,7 +323,28 @@ def build(target, onefile, clean, edition='lean'):
         produced = join(DIST, name + ('.exe' if platform.system() == 'Windows' else ''))
     if edition == 'full' and target == 'server':
         selftest(join(DIST, name, name + ('.exe' if platform.system() == 'Windows' else '')))
+    if target == 'desktop':
+        desktopSelftest(name)
     return produced
+
+
+def desktopSelftest(name):
+    """
+    Import ManyQt's Qt modules and the desktop app inside the built executable (offscreen, no window). ManyQt picks
+    its binding at runtime, which PyInstaller cannot see; this proves the bundle can actually load it.
+
+    :param name: str  bundle name
+    """
+    if platform.system() == 'Darwin':
+        binary = join(DIST, name + '.app', 'Contents', 'MacOS', name)
+    else:
+        binary = join(DIST, name, name + ('.exe' if platform.system() == 'Windows' else ''))
+    mods = 'ManyQt.QtCore,ManyQt.QtGui,ManyQt.QtWidgets,ManyQt.QtSvg,ManyQt.QtNetwork,ocrroute.desktop.app'
+    env = dict(os.environ, QT_QPA_PLATFORM='offscreen')
+    r = subprocess.run([binary, '--ocrroute-selftest', mods], capture_output=True, text=True, timeout=600, env=env)
+    print(r.stdout[-6000:], flush=True)
+    if r.returncode != 0:
+        raise SystemExit('desktop self-test failed: the executable cannot load its Qt layer (ManyQt).\n' + r.stderr[-3000:])
 
 
 def selftest(binary):

@@ -2,6 +2,17 @@
 
 ## 0.7.1 - 2026-09-25
 
+- **Desktop app on ManyQt** (https://github.com/Usama01TN/ManyQt): every Qt import goes through ManyQt, so the app
+  runs on PyQt5, PyQt6, PySide2 or PySide6 (`QT_API`); `pyqtSignal` became the portable `Signal`. The executables ship
+  PyQt5 only (`QT_API=pyqt5` pinned, other bindings excluded), and every desktop build now self-tests its Qt layer.
+- README: screenshots (Playground, Engines) and a "Support the project" section (ba9chich, Ko-fi).
+- **Automatic releases**: a push to `main` whose `ocrroute/version.py` carries a version without a `v<version>` tag is
+  published automatically once every build succeeds (the release creates the tag). Pushes with an already-released
+  version publish nothing. To release: bump `__version__`, push. A new "New version?" job checks the tag; the
+  "Why no release?" job explains every outcome, including "already released: bump the version".
+- Publishing runs one at a time (`concurrency: publish-release`), so two quick pushes cannot race on one version.
+- Tag pushes and **Run workflow** with *publish* (and *allow_incomplete*) keep working as before.
+
 - **Fix (CI, Full edition)**: `test_surya_collection_skips_its_demo_scripts` failed wherever Surya is installed. It read
   every flag value and flagged the `--exclude-module surya.scripts` / `surya.debug` values themselves; locally it passed
   only because Surya was absent and the function returned nothing. The test now uses a fake `surya` package, so it runs
@@ -12,6 +23,11 @@
   when every build job succeeds; a push to `main` skips it by design. New: **Run workflow** with *publish* ticked
   publishes `v<version>` from that run, and the release job refuses a tag that does not match
   `ocrroute/version.py`. The release notes now describe the Full edition files.
+- **Fix: "Publish release" was skipped even when a release was requested.** An `if:` without a status function gets an
+  implicit `success()`, so one failed build job (of eight) silently skipped publishing. The condition is now explicit,
+  a new **"Why no release?"** job always runs and states the reason in the run summary, and *Run workflow* with
+  **publish** + **allow_incomplete** publishes the builds that succeeded as a pre-release. Releases now take only
+  `ocrroute-*` artifacts: the `verify-logs-*` diagnostics of failed jobs were being downloaded into releases.
 
 ## 0.7.0 - 2026-09-25
 

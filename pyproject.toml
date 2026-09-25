@@ -43,7 +43,8 @@ calamari = ["calamari-ocr>=2.3", "tensorflow>=2.15"]
 keras = ["keras-ocr>=0.9"]  # legacy: needs TensorFlow and numpy<2 (imgaug); use a separate environment
 vlm = ["ocrroute[transformers]"]
 torch = ["ocrroute[easyocr,surya,transformers]"]
-desktop = ["PyQt5>=5.15", "keyring>=24"]
+# ManyQt: one API over PyQt4/5/6 and PySide/2/6 (https://github.com/Usama01TN/ManyQt); PyQt5 is the binding shipped
+desktop = ["ManyQt>=0.4.5", "PyQt5>=5.15", "keyring>=24"]
 all = ["ocrroute[api,local,desktop]"]
 dev = ["pytest>=8", "pytest-cov", "respx>=0.20", "ruff", "black", "mypy", "types-requests"]
 

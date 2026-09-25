@@ -59,13 +59,17 @@ a pip install with `OCRROUTE_SAFE_DISCOVERY=1`, or off with `OCRROUTE_SAFE_DISCO
 
 ## Publishing a release
 
-A push to `main` builds and tests every platform but does not publish ("Publish release: This job was skipped" is
-expected). To publish, either push a tag matching `ocrroute/version.py`:
+Releases are automatic: **bump `__version__` in `ocrroute/version.py` and push to `main`.** When every build succeeds,
+the workflow publishes `v<version>` (and creates the tag). A push whose version is already released publishes nothing,
+so ordinary commits never create releases.
 
-```bash
-git tag v0.7.1
-git push origin v0.7.1
-```
+Other ways, for special cases:
 
-or open **Actions > Build > Run workflow** and tick **publish**. The release job runs only when all build jobs succeed,
-so a release never goes out with a platform missing, and it refuses a tag that does not match the code version.
+- Push a tag matching the code version: `git tag v0.7.2 && git push origin v0.7.2` (a plain `git push` does not send
+  tags; the tag starts its own run in the Actions list).
+- **Actions > Build > Run workflow** with **publish** ticked; add **allow_incomplete** to publish the platforms that
+  built as a pre-release when some failed.
+
+Every run has a **Why no release?** job that states the decision: released, already released (bump the version),
+not requested, or blocked by a failed build. Releases never include the diagnostic logs of failed jobs, and a tag
+that does not match `ocrroute/version.py` is refused.

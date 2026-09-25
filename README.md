@@ -6,11 +6,11 @@ cost tracking and observability for reliable, cost-aware document understanding.
 
 It imports the given `AioOCR` engine library **unchanged** (55 `OCRPlugin` classes: Tesseract, RapidOCR, PaddleOCR, Surya,
 GOT-OCR, DeepSeek-OCR, Nougat, OCR.Space, Google Vision, Mistral OCR, Gemini/Claude/OpenAI-style VLM
-OCR, …) in a FastAPI gateway with a web control panel, a PyQt5 desktop app and a CLI. Persistence is
+OCR, …) in a FastAPI gateway with a web control panel, a desktop app (ManyQt: PyQt5 / PyQt6 / PySide2 / PySide6) and a CLI. Persistence is
 a single SQLite file.
 
 ```
-pip install -e ".[local,desktop,dev]"   # core + Tesseract/OpenCV extras + PyQt5 + tests
+pip install -e ".[local,desktop,dev]"   # core + Tesseract/OpenCV extras + ManyQt + tests
 ocrroute setup                          # admin user, first provider, default route, API key
 ocrroute serve                          # API  http://127.0.0.1:20256/v1/docs
                                         # panel http://127.0.0.1:20256/panel/
@@ -29,7 +29,19 @@ The response keeps the engine library's unified result **verbatim** under `resul
 metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`). See
 [docs/API.md](docs/API.md).
 
-## What you get
+## Screenshots:
+
+**Playground**: run any engine or route on an image or PDF and inspect the result as text, lines, JSON, routing or
+ready-to-use code, with the recognised words drawn over the input.
+
+![OcrRoute Playground: OCR.Space result with word boxes over the input and the JSON result](docs/screenshots/playground.png)
+
+**Engines**: every detected OCR engine, cloud and local, with availability, capabilities, pricing model, per-engine
+options, one-click provider creation and a probe button.
+
+![OcrRoute Engines page: cards for each detected engine with availability, capabilities and actions](docs/screenshots/engines.png)
+
+## What you get:
 
 | Area | Highlights |
 |---|---|
@@ -45,12 +57,12 @@ metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`)
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
 
-## Several servers
+## Several servers:
 
 Run one **leader** and any number of **followers**: followers mirror the leader's providers, credentials, routes,
 API keys and users. See `docs/CLUSTER.md`.
 
-## Editions and more engines
+## Editions and more engines:
 
 The stand-alone executables come in two editions:
 
@@ -71,7 +83,7 @@ The remaining deep-learning engines (Calamari, keras-ocr, GLM, olmOCR) install o
 installation: click **Install** in the Engines page, run `ocrroute engines install SuryaOcr`, or
 `pip install "ocrroute[surya]"`. See `docs/ENGINES.md`.
 
-## Stand-alone executables
+## Stand-alone executables:
 
 `python scripts/build_executable.py` builds two PyInstaller bundles - `ocrroute-server` (CLI + API + web panel;
 double-click starts the server) and `OcrRoute-Desktop` (PyQt5 app with the embedded server) - and archives them as
@@ -85,21 +97,12 @@ summary, and - on a `v*` tag - publishes all of them with SHA-256 checksums to a
 git tag v0.2.0 && git push --tags     # → https://github.com/<you>/ocrroute/releases/tag/v0.2.0
 ```
 
-## Code style
-
-Syntax is kept Python 2/3-portable (`from __future__` headers, `py23` shims, no f-strings or keyword-only args);
-see `docs/DECISIONS.md` #18 for the exact boundaries imposed by the frameworks.
-
-The gateway is written in the same conventions as AioOCR: `# coding=utf-8` headers, `class X(object)`,
-`super(Class, self)`, `__m_` private attributes with `getX`/`setX` accessors, camelCase methods, `:param:`
-docstrings and `.format()` strings. Type hints appear only where SQLAlchemy, Pydantic, FastAPI or Typer need them.
-
-## Documentation
+## Documentation:
 
 `docs/ARCHITECTURE.md` · `docs/ROUTING.md` · `docs/API.md` · `docs/ENGINES.md` · `docs/DEPLOYMENT.md` ·
 `docs/SECURITY.md` · `docs/TOOLS.md` · `docs/DECISIONS.md` · `docs/CHANGELOG.md`
 
-## Independence note
+## Independence note:
 
 Design patterns for gateway routing (fallback chains, balancing strategies, key management, dashboards)
 are widely used in the ecosystem; OcrRoute applies them to OCR. OcrRoute is an independent Python project
@@ -107,11 +110,29 @@ with its own namespace (`ocrroute`, `~/.ocrroute`, `OCRROUTE_*`), its own defaul
 refuses to bind 20128), and no chat/completions, LLM proxying or agent-protocol surface. It is not a fork,
 plugin or companion of any other gateway.
 
-## Third-party assets
+## Desktop app and Qt:
+
+The desktop app is written against [ManyQt](https://github.com/Usama01TN/ManyQt), one API over PyQt4/5/6 and
+PySide/2/6. The executables ship PyQt5; from source, `pip install "ocrroute[desktop]"` installs ManyQt with PyQt5, and
+any other installed binding works too (`QT_API=pyqt6`, `QT_API=pyside6`...). ManyQt is GPL-3.0, like PyQt5.
+
+## Support the project:
+
+OcrRoute is free and open source. If it saves you time or money, you can support its development:
+
+[![Support on ba9chich](https://img.shields.io/badge/Support-ba9chich-2ea44f?style=for-the-badge)](https://ba9chich.com/fr/IninouUsama)
+[![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/usamatn)
+
+- **ba9chich**: https://ba9chich.com/fr/IninouUsama
+- **Ko-fi**: https://ko-fi.com/usamatn
+
+Stars, bug reports and pull requests help too. Thank you!
+
+## Third-party assets:
 
 `ocrroute/assets/fonts/DejaVuSans.ttf` is DejaVu Sans (Bitstream Vera license; see `LICENSE-DejaVu.txt` next to it),
 used by PaddleOCR for visualisations.
 
-## License
+## License:
 
-MIT - see `LICENSE`. The `AioOCR/` library is included as given and keeps its original authorship.
+MIT - see `LICENSE`.

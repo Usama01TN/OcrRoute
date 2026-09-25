@@ -11,6 +11,10 @@ if getattr(sys, 'frozen', False):
     sys.path.insert(0, base)
     sys.path.insert(0, os.path.join(base, 'AioOCR'))
 
+import os as _os  # noqa: E402
+
+_os.environ.setdefault('QT_API', 'pyqt5')  # ManyQt: the executable bundles PyQt5 only
+
 from ocrroute.stdio import enableFaultHandler, ensureStreams  # noqa: E402
 
 ensureStreams('desktop')  # windowed builds start without stdout/stderr (sys.stderr is None)

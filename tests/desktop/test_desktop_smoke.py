@@ -5,13 +5,13 @@ import os
 
 import pytest
 
-pytest.importorskip('PyQt5')
+pytest.importorskip('ManyQt')
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 
 
 @pytest.fixture(scope='module')
 def qapp():
-    from PyQt5.QtWidgets import QApplication
+    from ManyQt.QtWidgets import QApplication
 
     app = QApplication.instance() or QApplication([])
     yield app
@@ -47,7 +47,7 @@ def test_image_viewer_overlays_and_region(qapp, sample_png):
     got = []
     v.regionSelected.connect(lambda *r: got.append(r))
     v.setCropMode(True)
-    from PyQt5.QtCore import QPointF
+    from ManyQt.QtCore import QPointF
 
     v.beginCrop(QPointF(5, 5))
     v.updateCrop(QPointF(55, 35))
@@ -63,7 +63,7 @@ def test_scan_page_runs_against_fake_engine(qapp, ctx, sample_png):
 
     import requests
     import uvicorn
-    from PyQt5.QtCore import QEventLoop, QThreadPool, QTimer
+    from ManyQt.QtCore import QEventLoop, QThreadPool, QTimer
 
     from ocrroute.api.app import createApp
     from ocrroute.crypto import hashApiKey, newApiKey
@@ -110,7 +110,7 @@ def test_scan_page_runs_against_fake_engine(qapp, ctx, sample_png):
         # GUI responsiveness probe: a precise 10 ms timer must keep firing while the scan runs in the worker pool.
         # The loop stays open for at least MIN_WINDOW seconds so fast machines (e.g. Windows CI) still collect
         # enough samples; Qt.PreciseTimer avoids Windows' default ~15.6 ms coarse timer resolution.
-        from PyQt5.QtCore import Qt
+        from ManyQt.QtCore import Qt
 
         MIN_WINDOW = 0.4
         ticks = []
@@ -149,7 +149,7 @@ def test_worker_results_survive_garbage_collection(qapp):
     import gc
     import time
 
-    from PyQt5.QtCore import QEventLoop, QTimer
+    from ManyQt.QtCore import QEventLoop, QTimer
 
     from ocrroute.desktop.workers import liveCount, runAsync
 
