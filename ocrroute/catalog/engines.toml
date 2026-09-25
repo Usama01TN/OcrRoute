@@ -159,6 +159,24 @@ supports_tables = true
 cost_model = "per_token"
 quality_score = 80
 
+[engines.OmniRouteOcr]
+# OmniRoute: a free, open-source AI gateway you run yourself (npm install -g omniroute; default port 20128, which
+# OcrRoute never binds). One OpenAI-compatible endpoint in front of 339+ providers, 90+ with free tiers, with
+# quota-aware fallback. requires_key: auto routes only use it once its dashboard key is added as a credential, so
+# installations without a gateway never pay a failed attempt. Images leave the machine (OmniRoute forwards them to
+# the provider it picks), so it is an "api" engine and never part of auto/private. Cost is billed by the upstream
+# providers you connect in OmniRoute, not by OcrRoute.
+name = "OmniRoute (local AI gateway)"
+vendor = "OmniRoute"
+requires_key = true
+supports_handwriting = true
+supports_tables = true
+supports_overlay = true
+cost_model = "free"
+quality_score = 78
+default_model = "auto"
+homepage = "https://omniroute.online"
+
 [engines.GroqOcr]
 name = "Groq (VLM)"
 vendor = "Groq"

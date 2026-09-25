@@ -52,12 +52,17 @@ The stand-alone executables come in two editions:
 | Edition | Files | Engines | Unpacked size |
 |---|---|---|---|
 | **Lean** | `ocrroute-server-*`, `ocrroute-desktop-*` | 49 of 56: every engine without a deep-learning framework (Tesseract, RapidOCR, Mistral OCR, all cloud engines) | ~150 MB |
-| **Full** | `ocrroute-server-full-*`, `ocrroute-desktop-full-*` | Lean + **EasyOCR** (PyTorch, CPU) + **PaddleOCR** (PaddlePaddle) | ~1.5 GB |
+| **Full** | `ocrroute-server-full-*`, `ocrroute-desktop-full-*` | Lean + **EasyOCR** and **Surya** (PyTorch, CPU) + **PaddleOCR** (PaddlePaddle) | ~1.7 GB |
 
-On Intel Macs the Full edition includes PaddleOCR but not EasyOCR: PyTorch publishes no Intel-Mac build newer than
-2.2, which predates NumPy 2. EasyOCR and PaddleOCR download their model weights on first use.
+On Intel Macs the Full edition includes PaddleOCR but not EasyOCR or Surya: PyTorch publishes no Intel-Mac build newer
+than 2.2, which predates NumPy 2. EasyOCR, Surya and PaddleOCR download their model weights on first use.
 
-The remaining deep-learning engines (Surya, Calamari, keras-ocr, GLM, olmOCR) install on demand in a pip
+**Surya** is bundled as 0.17.1, the last release that runs OCR entirely in PyTorch; Surya 2 (0.20+) needs a vLLM or
+llama.cpp server (`pip install "ocrroute[surya2]"`). Surya's code is Apache-2.0, but its **model weights** use a
+modified AI Pubs Open Rail-M license: free for research, personal use and startups under $5M in funding or revenue;
+other commercial use needs a license from Datalab.
+
+The remaining deep-learning engines (Calamari, keras-ocr, GLM, olmOCR) install on demand in a pip
 installation: click **Install** in the Engines page, run `ocrroute engines install SuryaOcr`, or
 `pip install "ocrroute[surya]"`. See `docs/ENGINES.md`.
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
-version = "0.5.6"
+version = "0.6.1"
 description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
 readme = "README.md"
 license = { text = "MIT" }
@@ -32,7 +32,10 @@ local = ["pytesseract>=0.3.10", "opencv-python-headless>=4.8"]
 # Deep-learning engines: one extra per engine family. Install only what you use; they are not bundled in the
 # stand-alone executables (PyTorch / TensorFlow / PaddlePaddle add several GB and pin conflicting versions).
 easyocr = ["easyocr>=1.7"]
-surya = ["surya-ocr>=0.17"]
+# Surya 0.17.x: OCR entirely in PyTorch. Surya 2 (0.20+) needs a vLLM (NVIDIA) or llama.cpp `llama-server` backend.
+# Model weights: modified AI Pubs Open Rail-M license (free for research, personal use, startups < $5M).
+surya = ["surya-ocr>=0.17,<0.20", "transformers>=4.56.1,<5"]
+surya2 = ["surya-ocr>=0.20"]
 transformers = ["transformers>=4.45", "torch>=2.4", "accelerate>=0.33"]  # GlmOcrHF and other Hugging Face engines
 olmocr = ["olmocr>=0.4", "transformers>=4.45", "torch>=2.4", "pypdf>=4"]
 paddle = ["paddleocr>=3.0", "paddlepaddle>=3.0"]

@@ -20,7 +20,8 @@ log = getLogger(__name__)
 ENGINE_DEPS = {
     'engines.api.mistralocr': ('api', ['mistralai>=1.0'], '', '1 MB'),
     'engines.local.easy': ('easyocr', ['easyocr>=1.7'], 'PyTorch', '~800 MB'),
-    'engines.local.suryaocr': ('surya', ['surya-ocr>=0.17'], 'PyTorch', '~900 MB'),
+    # Surya 0.17.x runs OCR in PyTorch alone; Surya 2 (0.20+) needs a vLLM / llama.cpp server (extra "surya2").
+    'engines.local.suryaocr': ('surya', ['surya-ocr>=0.17,<0.20', 'transformers>=4.56.1,<5'], 'PyTorch', '~1.5 GB'),
     'engines.local.glmocrhf': ('transformers', ['transformers>=4.45', 'torch>=2.4', 'accelerate>=0.33'], 'PyTorch', '~900 MB'),
     'engines.local.olmocrlib': ('olmocr', ['olmocr>=0.4', 'transformers>=4.45', 'torch>=2.4', 'pypdf>=4'], 'PyTorch', '~1 GB'),
     'engines.local.paddleocrlib': ('paddle', ['paddleocr>=3.0', 'paddlepaddle>=3.0'], 'PaddlePaddle', '~600 MB'),
@@ -51,7 +52,7 @@ def planFor(module):
     if isFrozen() and framework:
         from ocrroute import edition
 
-        full = extra in ('easyocr', 'paddle')  # engines the Full edition bundles
+        full = extra in ('easyocr', 'paddle', 'surya')  # engines the Full edition bundles
         if full and edition.name() == 'lean':
             hint = ('Not included in this lean executable (needs {}, {}). Download the Full edition '
                     '(ocrroute-server-full / OcrRoute-Desktop-Full), or install with pip: {}'.format(framework, size, command))

@@ -123,7 +123,7 @@ jobs:
           assert mistral and mistral["available"], f"MistralOcr must be bundled: {mistral and mistral['import_error']}"
           print(f"OcrRoute {v['version']}: {len(e)} engines discovered, {len(ok)} importable in this bundle")
           missing = [x["id"] for x in e if not x["available"] and "crashed the interpreter" not in (x.get("import_error") or "")]
-          claimed = {"EasyOCR": "EasyOCR", "PaddleOCR": "PaddleOcr"}
+          claimed = {"EasyOCR": "EasyOCR", "PaddleOCR": "PaddleOcr", "Surya": "SuryaOcr"}
           for name in v.get("bundled_extra_engines", []):
               x = next((y for y in e if y["id"] == claimed[name]), None)
               if x and not x["available"]:
@@ -137,7 +137,7 @@ jobs:
           if [ "${EDITION}" = "full" ]; then
             # Real OCR through every engine this Full build bundles (downloads the engines' models on first use).
             python -c "from PIL import Image, ImageDraw, ImageFont; im = Image.new('RGB', (900, 180), 'white'); ImageDraw.Draw(im).text((30, 50), 'OcrRoute Invoice 2026', fill='black', font=ImageFont.load_default(size=64)); im.save('full-test.png')"
-            for ENGINE in $(python -c "import json; v = json.load(open('version.out')); print(' '.join({'EasyOCR': 'EasyOCR', 'PaddleOCR': 'PaddleOcr'}[n] for n in v['bundled_extra_engines']))"); do
+            for ENGINE in $(python -c "import json; v = json.load(open('version.out')); print(' '.join({'EasyOCR': 'EasyOCR', 'PaddleOCR': 'PaddleOcr', 'Surya': 'SuryaOcr'}[n] for n in v['bundled_extra_engines']))"); do
               check "ocr-$ENGINE" "$BIN" ocr full-test.png -e "$ENGINE" --no-cache
               python - "$ENGINE" <<'PY'
           import sys
@@ -148,7 +148,7 @@ jobs:
           PY
               [ $? -eq 0 ] || exit 1
             done
-            python -c "import json, platform, sys; v = json.load(open('version.out')); want = ['PaddleOCR'] + ([] if (sys.platform == 'darwin' and platform.machine() == 'x86_64') else ['EasyOCR']); missing = [n for n in want if n not in v['bundled_extra_engines']]; assert not missing, f'Full edition is missing {missing}'; print('Full edition bundles:', ', '.join(v['bundled_extra_engines']))" || exit 1
+            python -c "import json, platform, sys; v = json.load(open('version.out')); want = ['PaddleOCR'] + ([] if (sys.platform == 'darwin' and platform.machine() == 'x86_64') else ['EasyOCR', 'Surya']); missing = [n for n in want if n not in v['bundled_extra_engines']]; assert not missing, f'Full edition is missing {missing}'; print('Full edition bundles:', ', '.join(v['bundled_extra_engines']))" || exit 1
           fi
           # Smoke-test the server itself: start, hit /v1/health, stop.
           "$BIN" serve --port 20299 > serve.log 2>&1 &

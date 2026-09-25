@@ -193,6 +193,27 @@ def declaredDependencies(dist, extras=()):
     return sorted(seen)
 
 
+def suryaArgs():
+    """
+    Surya's engine modules and data, without ``surya.scripts`` / ``surya.debug`` (a Streamlit demo, fine-tuning and
+    S3 tools that import streamlit, datasets, boto3, playwright...: never used by the engine).
+
+    :return: list[str]
+    """
+    from importlib.util import find_spec
+
+    spec = find_spec('surya')
+    if spec is None or not spec.submodule_search_locations:
+        return []
+    import pkgutil
+
+    out = ['--collect-data', 'surya']
+    for info in pkgutil.walk_packages(list(spec.submodule_search_locations), prefix='surya.'):
+        if not info.name.startswith(('surya.scripts', 'surya.debug')):
+            out += ['--hidden-import', info.name]
+    return out + ['--exclude-module', 'surya.scripts', '--exclude-module', 'surya.debug']
+
+
 def editionArgs(edition):
     """
     :param edition: str  lean | full
@@ -204,12 +225,16 @@ def editionArgs(edition):
                 '--exclude-module', 'paddleocr', '--exclude-module', 'easyocr', '--exclude-module', 'cv2.gapi']
     from importlib.util import find_spec
 
-    out = ['--exclude-module', 'transformers', '--exclude-module', 'tensorflow']
+    out = ['--exclude-module', 'tensorflow']
+    if find_spec('surya') is None:  # Surya is the only bundled engine that needs transformers
+        out += ['--exclude-module', 'transformers']
     for pkg in FULL_PACKAGES:
         if find_spec(pkg) is not None:
             out += ['--collect-all', pkg]
+    out += suryaArgs()
     dists = set(d for d in FULL_METADATA if installed(d))
-    for root, extras in (('paddlex', ('ocr', 'ocr-core')), ('paddleocr', ()), ('easyocr', ())):
+    for root, extras in (('paddlex', ('ocr', 'ocr-core')), ('paddleocr', ()), ('easyocr', ()), ('transformers', ()),
+                         ('surya-ocr', ())):  # transformers checks its dependencies' versions by metadata at import
         if installed(root):
             dists.update(declaredDependencies(root, extras))
     for dist in sorted(dists):
@@ -232,7 +257,8 @@ def editionMarker(edition):
     from importlib.util import find_spec
 
     if edition == 'full':
-        engines = [n for n, mod in (('EasyOCR', 'easyocr'), ('PaddleOCR', 'paddleocr')) if find_spec(mod) is not None]
+        engines = [n for n, mod in (('EasyOCR', 'easyocr'), ('PaddleOCR', 'paddleocr'), ('Surya', 'surya'))
+                   if find_spec(mod) is not None]
     os.makedirs(join(ROOT, 'build'), exist_ok=True)
     path = join(ROOT, 'build', 'edition.json')
     with open(path, 'w') as fh:
@@ -290,7 +316,9 @@ def selftest(binary):
     modules = {'EasyOCR': ['torch', 'torchvision', 'easyocr', 'engines.local.easy', 'torch:compute', 'torchvision:ops'],
                'PaddleOCR': ['paddle', 'paddlex', 'paddleocr', 'engines.local.paddleocrlib', 'paddleocr:requirements',
                              'paddleocr:model-sources',
-                             'paddle:compute']}
+                             'paddle:compute'],
+               'Surya': ['torch', 'transformers', 'surya', 'surya.recognition', 'surya.detection',
+                         'engines.local.suryaocr', 'torch:compute']}
     wanted = [m for e in engines for m in modules.get(e, [])]
     if not wanted:
         return

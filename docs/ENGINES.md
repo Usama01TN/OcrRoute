@@ -47,7 +47,7 @@ OpenCV 4.11 while the others use OpenCV 5; keras-ocr needs `imgaug`, which does 
 | Engine | Framework | Install |
 |---|---|---|
 | EasyOCR | PyTorch | `pip install "ocrroute[easyocr]"` |
-| SuryaOcr | PyTorch | `pip install "ocrroute[surya]"` |
+| SuryaOcr | PyTorch (Surya 0.17.x; bundled in Full) | `pip install "ocrroute[surya]"`; Surya 2 with a vLLM / llama.cpp server: `"ocrroute[surya2]"` |
 | GlmOcrHF | PyTorch (transformers) | `pip install "ocrroute[transformers]"` |
 | OlmOcrLib | PyTorch (transformers) | `pip install "ocrroute[olmocr]"` |
 | PaddleOcr | PaddlePaddle | `pip install "ocrroute[paddle]"` |
@@ -63,3 +63,19 @@ Ubuntu, Homebrew), the install is refused with instructions: use a virtual envir
 Mistral OCR needs only the small `mistralai` SDK, which is bundled (and in the `api` extra).
 AioOCR's own "Could not import ..." messages are captured instead of printed; set `OCRROUTE_VERBOSE_DISCOVERY=1` to
 see them on stderr. The Engines page and `ocrroute doctor` show the same information per engine.
+
+## OmniRoute (local AI gateway)
+
+`OmniRouteOcr` sends images to an [OmniRoute](https://omniroute.online) gateway you run yourself
+(`npm install -g omniroute`, then `omniroute setup` and `omniroute`). OmniRoute exposes one OpenAI-compatible endpoint in
+front of 339+ providers (90+ with free tiers) and falls back automatically when one fails or hits its quota.
+
+1. Start OmniRoute and connect at least one vision-capable provider in its dashboard (http://localhost:20128).
+2. In OcrRoute, open **Providers**, pick *OmniRoute (local AI gateway)* and add the dashboard API key as a credential.
+   Set the `base` option if the gateway is not on `http://localhost:20128`, and `model` to pin one routed model
+   (default `auto`: OmniRoute chooses and falls back).
+
+Auto routes use OmniRoute only once it has a credential, so installations without a gateway never pay a failed
+attempt. The image leaves the machine (OmniRoute forwards it to the provider it picks), so OmniRoute is never part of
+`auto/private`. OcrRoute listens on 20256 and never binds 20128, so both run side by side. Costs are billed by the
+providers you connect in OmniRoute, not by OcrRoute (its cost estimate for OmniRoute is 0).

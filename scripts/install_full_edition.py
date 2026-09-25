@@ -21,6 +21,13 @@ import subprocess
 import sys
 
 OPENCV = 'opencv-contrib-python-headless==4.10.0.84'
+# Surya 0.17.1: the last release that runs OCR entirely in PyTorch (Surya 2, 0.20+, needs a vLLM or llama.cpp
+# server). Installed without pip's resolver: its exact pins (opencv-python-headless 4.11, pypdfium2 4.30, pillow<11,
+# pre-commit) would replace the single OpenCV PaddleX needs and OcrRoute's pypdfium2; it only imports cv2 and never
+# checks those versions. These are the dependencies it actually uses.
+SURYA = 'surya-ocr==0.17.1'
+SURYA_DEPS = ('transformers>=4.56.1,<5', 'einops>=0.8.1,<0.9', 'filetype>=1.2,<2', 'platformdirs>=4.3.6,<5',
+              'pydantic>=2.5.3,<3', 'pydantic-settings>=2.1,<3', 'python-dotenv>=1,<2', 'click>=8.1.8,<9')
 NUMPY = 'numpy>=1.24,<2.4'
 
 
@@ -50,16 +57,26 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--no-easyocr', action='store_true', help='PaddleOCR only')
     ap.add_argument('--no-paddle', action='store_true', help='EasyOCR only')
+    ap.add_argument('--no-surya', action='store_true', help='skip Surya')
     ap.add_argument('--legacy-paddle', action='store_true', help='force the Paddle 3.0 pins (testing on other platforms)')
     args = ap.parse_args()
     withEasy = easyocrSupported() and not args.no_easyocr
     withPaddle = not args.no_paddle
+    withSurya = easyocrSupported() and not args.no_surya  # needs PyTorch >= 2.7: not on Intel Macs
     if withEasy:
         if sys.platform.startswith('linux'):
             pip('install', '--prefer-binary', 'torch', 'torchvision', '--index-url', 'https://download.pytorch.org/whl/cpu')
         else:
             pip('install', '--prefer-binary', 'torch', 'torchvision')
         pip('install', '--prefer-binary', 'easyocr>=1.7', NUMPY)
+    if withSurya:
+        if not withEasy:  # PyTorch comes with the EasyOCR step; install it here when EasyOCR is skipped
+            if sys.platform.startswith('linux'):
+                pip('install', '--prefer-binary', 'torch', 'torchvision', '--index-url', 'https://download.pytorch.org/whl/cpu')
+            else:
+                pip('install', '--prefer-binary', 'torch', 'torchvision')
+        pip('install', '--no-deps', SURYA)
+        pip('install', '--prefer-binary', *(SURYA_DEPS + (NUMPY,)))
     if withPaddle and (legacyPaddle() or args.legacy_paddle):
         pip('install', '--prefer-binary', 'paddlepaddle==3.0.0', 'paddlex[ocr]==3.0.3', NUMPY)
         # paddleocr 3.0.3 asks for paddlex[ie,multimodal,ocr]>=3.0.3: no upper bound (pip would fetch the newest
@@ -78,6 +95,9 @@ def main():
         probe.append('import easyocr, torch; print("easyocr", easyocr.__version__, "torch", torch.__version__)')
     if withPaddle:
         probe.append('import paddle, paddleocr; print("paddle", paddle.__version__)')
+    if withSurya:
+        probe.append('import surya, transformers; from surya.recognition import RecognitionPredictor; '
+                     'from surya.detection import DetectionPredictor; print("surya ok, transformers", transformers.__version__)')
     # The check imports PaddleX in a fresh interpreter, so it needs OcrRoute's Paddle settings too: PaddleX 3.0
     # downloads a font at import time from a URL that now answers 403 everywhere.
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,7 +108,7 @@ def main():
     print('Paddle settings for the check:', paddleenv.apply(env), flush=True)
     subprocess.check_call([sys.executable, '-c', '; '.join(probe)], env=env)
     with open('full-edition.txt', 'w') as fh:
-        fh.write('easyocr={} paddleocr={}\n'.format(int(withEasy), int(withPaddle)))
+        fh.write('easyocr={} paddleocr={} surya={}\n'.format(int(withEasy), int(withPaddle), int(withSurya)))
     return 0
 
 

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.6.1 - 2026-09-25
+
+- **OmniRoute engine integrated** (`AioOCR/engines/api/omniroute.py`, class `OmniRouteOcr`). OcrRoute's catalog now
+  describes it properly: name "OmniRoute (local AI gateway)", vendor, handwriting / tables / overlay support, default
+  model `auto`, homepage. It needs its dashboard key as a credential before auto routes use it, and it is never part
+  of `auto/private` (images are forwarded to the provider OmniRoute picks).
+- Integration test against an in-process stand-in gateway: key forwarding, `model=auto`, image upload, 0-1000
+  `box_2d` grid scaled to pixels, exclusion from `auto/private`.
+- `docs/ENGINES.md`: OmniRoute setup.
+
+## 0.6.0 - 2026-09-24
+
+- **Surya OCR in the Full edition** (Linux, Windows, macOS arm64). Bundled as **Surya 0.17.1**, the last release that
+  runs OCR entirely in PyTorch: Surya 2 (0.20+) delegates OCR to a vLLM (NVIDIA + Docker) or llama.cpp server. The
+  AioOCR engine supports both; `pip install "ocrroute[surya2]"` for Surya 2 with your own backend.
+- Surya is installed without pip's resolver: its exact pins (`opencv-python-headless==4.11.0.86`, `pypdfium2==4.30.0`,
+  `pillow<11`, `pre-commit`) would replace the single OpenCV that PaddleX needs and OcrRoute's pypdfium2. Only the
+  dependencies it imports are installed, with `transformers>=4.56.1,<5` (Transformers 5 arrived with Surya 2).
+  Verified: every module Surya's engine path imports is installed; `flash_attn` / `torch_xla` are optional; the set
+  resolves with PaddleOCR 3.7 / PaddleX 3.7.2 (Transformers 4.57.6, NumPy 2.3.5).
+- Build: Surya's modules are collected without `surya.scripts` / `surya.debug` (Streamlit, datasets, boto3...);
+  Transformers is bundled only when Surya is, with the metadata of every dependency it declares. The frozen self-test
+  imports Surya's recognition and detection predictors and its engine; CI runs a real OCR through it.
+- Not on macOS x86_64: Surya needs PyTorch >= 2.7.
+- License note: Surya's model weights use a modified AI Pubs Open Rail-M license (free for research, personal use and
+  startups under $5M; other commercial use needs a license from Datalab).
+
 ## 0.5.6 - 2026-09-24
 
 - **Fix (Full edition, PaddleOCR on macOS x86_64)**: model downloads failed with `403 Forbidden` for

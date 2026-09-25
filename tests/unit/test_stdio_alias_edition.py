@@ -195,3 +195,30 @@ def test_paddlex30_model_sources_patch(monkeypatch):
     env = {}
     paddleenv.apply(env)
     assert env['PADDLE_PDX_MODEL_SOURCE'] == 'huggingface'  # never the dead BOS server
+
+
+def test_surya_install_plan_targets_the_pytorch_only_release(monkeypatch):
+    """Surya 2 (0.20+) needs a vLLM / llama.cpp server; the self-contained engine is Surya 0.17.x."""
+    import sys
+
+    from ocrroute.runtime import engineinstall as ei
+
+    plan = ei.planFor('engines.local.suryaocr')
+    assert plan['extra'] == 'surya' and 'surya-ocr>=0.17,<0.20' in plan['packages']
+    assert any(p.startswith('transformers') and '<5' in p for p in plan['packages'])
+    from ocrroute import edition
+
+    monkeypatch.setattr(sys, 'frozen', True, raising=False)
+    monkeypatch.setattr(edition, 'name', lambda: 'lean')
+    assert 'Full edition' in ei.planFor('engines.local.suryaocr')['hint']  # lean points to the Full edition
+
+
+def test_surya_collection_skips_its_demo_scripts(monkeypatch):
+    import os
+    import sys
+
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+    import build_executable as b
+
+    args = b.suryaArgs()  # [] when Surya is not installed in this environment
+    assert not any(a.startswith(('surya.scripts', 'surya.debug')) for a in args[1::2] if args and a != '--collect-data')
