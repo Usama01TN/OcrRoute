@@ -204,17 +204,44 @@ jobs:
             echo "Download: ${{ steps.upload.outputs.artifact-url }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  version-check:
+    name: New version?
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      new: ${{ steps.v.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Is v<version> already released?
+        id: v
+        run: |
+          VERSION=$(sed -n "s/^__version__ *= *['\"]\([^'\"]*\)['\"].*/\1/p" ocrroute/version.py)
+          [ -n "${VERSION}" ] || { echo "::error::could not read __version__ from ocrroute/version.py"; exit 1; }
+          TAG="v${VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null 2>&1; then NEW=false; else NEW=true; fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "new=${NEW}" >> "$GITHUB_OUTPUT"
+          echo "code version ${VERSION}: tag ${TAG} $( [ "${NEW}" = true ] && echo 'does not exist yet' || echo 'already exists')"
+
   release:
     name: Publish release
     # Runs for a pushed version tag (git tag v0.7.1 && git push origin v0.7.1), or for "Run workflow" with
     # "publish" ticked. By default every build job must succeed. NOTE: an `if:` without a status function gets an
     # implicit success(), which silently skips this job when any build fails, so the status is spelled out here and
     # the "Why no release?" job explains every skip in the run summary.
+    # Also automatic: a push to main whose ocrroute/version.py has no v<version> tag yet (bump the version, push).
     if: >-
       always() && !cancelled() &&
-      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)) &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+       (github.event_name == 'workflow_dispatch' && inputs.publish) ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version-check.outputs.new == 'true')) &&
       (needs.build.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.allow_incomplete))
-    needs: build
+    needs: [build, version-check]
+    concurrency:
+      group: publish-release   # one publication at a time: two quick pushes cannot race on the same version
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -273,7 +300,7 @@ jobs:
 
   release-gate:
     name: Why no release?
-    needs: build
+    needs: [build, version-check]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -284,19 +311,27 @@ jobs:
           PUBLISH: ${{ inputs.publish }}
           ALLOW_INCOMPLETE: ${{ inputs.allow_incomplete }}
           BUILD: ${{ needs.build.result }}
+          NEW_VERSION: ${{ needs.version-check.outputs.new }}
+          TAG: ${{ needs.version-check.outputs.tag }}
         run: |
-          if [ "${REF#refs/tags/v}" != "${REF}" ] || { [ "${EVENT}" = "workflow_dispatch" ] && [ "${PUBLISH}" = "true" ]; }; then
+          AUTO=no
+          if [ "${EVENT}" = "push" ] && [ "${REF}" = "refs/heads/main" ] && [ "${NEW_VERSION}" = "true" ]; then AUTO=yes; fi
+          if [ "${REF#refs/tags/v}" != "${REF}" ] || { [ "${EVENT}" = "workflow_dispatch" ] && [ "${PUBLISH}" = "true" ]; } \
+             || [ "${AUTO}" = "yes" ]; then
             WANTED=yes; else WANTED=no; fi
           {
             echo "### Release decision"
             echo "- event: \`${EVENT}\`, ref: \`${REF}\`, publish: \`${PUBLISH:-n/a}\`, allow_incomplete: \`${ALLOW_INCOMPLETE:-n/a}\`"
             echo "- build jobs overall: \`${BUILD}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "${WANTED}" = "no" ]; then
-            MSG="No release requested: this was a ${EVENT} on ${REF}. Push a tag (git tag vX.Y.Z && git push origin vX.Y.Z) or use Run workflow with 'publish' ticked."
+          if [ "${WANTED}" = "no" ] && [ "${EVENT}" = "push" ] && [ "${REF}" = "refs/heads/main" ]; then
+            MSG="${TAG:-This version} is already released, so this push publishes nothing. To release, bump __version__ in ocrroute/version.py and push: the new version is published automatically once every build succeeds."
+            echo "::notice title=Release skipped::${MSG}"
+          elif [ "${WANTED}" = "no" ]; then
+            MSG="No release requested: this was a ${EVENT} on ${REF}. Releases are published automatically when a push to main carries a new version, or with Run workflow and 'publish' ticked."
             echo "::notice title=Release skipped::${MSG}"
           elif [ "${BUILD}" = "success" ]; then
-            MSG="Release requested and every build succeeded: the 'Publish release' job publishes it."
+            MSG="Release ${TAG} requested$( [ "${AUTO}" = yes ] && echo ' automatically (new version on main)') and every build succeeded: the 'Publish release' job publishes it."
             echo "::notice title=Release::${MSG}"
           elif [ "${ALLOW_INCOMPLETE}" = "true" ]; then
             MSG="Release requested with allow_incomplete while builds ended '${BUILD}': publishing the builds that succeeded as a pre-release."
