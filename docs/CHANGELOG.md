@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1 - 2026-09-25
+
+- **Fix (CI, Full edition)**: `test_surya_collection_skips_its_demo_scripts` failed wherever Surya is installed. It read
+  every flag value and flagged the `--exclude-module surya.scripts` / `surya.debug` values themselves; locally it passed
+  only because Surya was absent and the function returned nothing. The test now uses a fake `surya` package, so it runs
+  everywhere, and checks included and excluded modules separately.
+- `suryaArgs()` lists Surya's modules from its files instead of `pkgutil.walk_packages`, which imported every
+  subpackage at build time and silently skipped any that failed to import.
+
 ## 0.7.0 - 2026-09-25
 
 - **Cluster sync** (`docs/CLUSTER.md`): one leader, any number of followers. Followers mirror providers, credentials,

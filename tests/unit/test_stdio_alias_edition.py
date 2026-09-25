@@ -213,12 +213,29 @@ def test_surya_install_plan_targets_the_pytorch_only_release(monkeypatch):
     assert 'Full edition' in ei.planFor('engines.local.suryaocr')['hint']  # lean points to the Full edition
 
 
-def test_surya_collection_skips_its_demo_scripts(monkeypatch):
+def test_surya_collection_skips_its_demo_scripts(monkeypatch, tmp_path):
+    """Regression: the old check read every flag value and flagged the --exclude-module values themselves.
+    Uses a fake `surya` package so it runs whether or not Surya is installed."""
+    import importlib
     import os
     import sys
 
+    pkg = tmp_path / 'surya'
+    for rel in ('__init__.py', 'recognition/__init__.py', 'recognition/loader.py', 'detection/__init__.py',
+                'scripts/__init__.py', 'scripts/streamlit_app.py', 'debug/__init__.py', 'debug/text.py', 'settings.py'):
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text('')
+    monkeypatch.syspath_prepend(str(tmp_path))
+    for name in [m for m in sys.modules if m == 'surya' or m.startswith('surya.')]:
+        monkeypatch.delitem(sys.modules, name)
+    importlib.invalidate_caches()
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
     import build_executable as b
 
-    args = b.suryaArgs()  # [] when Surya is not installed in this environment
-    assert not any(a.startswith(('surya.scripts', 'surya.debug')) for a in args[1::2] if args and a != '--collect-data')
+    args = b.suryaArgs()
+    pairs = list(zip(args[0::2], args[1::2]))
+    hidden = {v for f, v in pairs if f == '--hidden-import'}
+    assert hidden == {'surya', 'surya.settings', 'surya.recognition', 'surya.recognition.loader', 'surya.detection'}
+    assert {v for f, v in pairs if f == '--exclude-module'} == {'surya.scripts', 'surya.debug'}
+    assert ('--collect-data', 'surya') in pairs
+    assert 'surya.scripts' not in sys.modules  # nothing was imported to list the modules

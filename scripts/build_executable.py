@@ -198,20 +198,38 @@ def suryaArgs():
     Surya's engine modules and data, without ``surya.scripts`` / ``surya.debug`` (a Streamlit demo, fine-tuning and
     S3 tools that import streamlit, datasets, boto3, playwright...: never used by the engine).
 
-    :return: list[str]
+    Modules are listed from the package's files, so nothing is imported at build time (``pkgutil.walk_packages``
+    imports every subpackage and silently skips any that fail).
+
+    :return: list[str]  ``--collect-data surya``, one ``--hidden-import`` per engine module, then the two
+             ``--exclude-module`` flags; ``[]`` when Surya is not installed
     """
     from importlib.util import find_spec
 
     spec = find_spec('surya')
     if spec is None or not spec.submodule_search_locations:
         return []
-    import pkgutil
-
+    root = list(spec.submodule_search_locations)[0]
+    skipped = ('surya.scripts', 'surya.debug')
+    modules = set()
+    for dirPath, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d != '__pycache__')
+        rel = os.path.relpath(dirPath, os.path.dirname(root))
+        package = rel.replace(os.sep, '.')
+        if package == skipped[0] or package.startswith(skipped[0] + '.') or package == skipped[1] \
+                or package.startswith(skipped[1] + '.'):
+            dirs[:] = []
+            continue
+        if '__init__.py' not in files:
+            continue
+        modules.add(package)
+        modules.update(package + '.' + f[:-3] for f in files if f.endswith('.py') and f != '__init__.py')
     out = ['--collect-data', 'surya']
-    for info in pkgutil.walk_packages(list(spec.submodule_search_locations), prefix='surya.'):
-        if not info.name.startswith(('surya.scripts', 'surya.debug')):
-            out += ['--hidden-import', info.name]
-    return out + ['--exclude-module', 'surya.scripts', '--exclude-module', 'surya.debug']
+    for name in sorted(modules):
+        out += ['--hidden-import', name]
+    for name in skipped:
+        out += ['--exclude-module', name]
+    return out
 
 
 def editionArgs(edition):
