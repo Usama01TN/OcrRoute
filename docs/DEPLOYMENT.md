@@ -56,3 +56,16 @@ Frozen builds probe engine imports in a child process on first start. A module w
 interpreter is disabled (shown in the Engines page with the signal) instead of crashing the gateway. Force it on for
 a pip install with `OCRROUTE_SAFE_DISCOVERY=1`, or off with `OCRROUTE_SAFE_DISCOVERY=0`. Results are cached in
 `~/.ocrroute/cache/engine-probe-*.json`; delete that file after changing installed packages to probe again.
+
+## Publishing a release
+
+A push to `main` builds and tests every platform but does not publish ("Publish release: This job was skipped" is
+expected). To publish, either push a tag matching `ocrroute/version.py`:
+
+```bash
+git tag v0.7.1
+git push origin v0.7.1
+```
+
+or open **Actions > Build > Run workflow** and tick **publish**. The release job runs only when all build jobs succeed,
+so a release never goes out with a platform missing, and it refuses a tag that does not match the code version.

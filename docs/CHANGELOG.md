@@ -8,6 +8,10 @@
   everywhere, and checks included and excluded modules separately.
 - `suryaArgs()` lists Surya's modules from its files instead of `pkgutil.walk_packages`, which imported every
   subpackage at build time and silently skipped any that failed to import.
+- **Releases**: publishing still happens only for a version tag (`git tag v0.7.1 && git push origin v0.7.1`) and only
+  when every build job succeeds; a push to `main` skips it by design. New: **Run workflow** with *publish* ticked
+  publishes `v<version>` from that run, and the release job refuses a tag that does not match
+  `ocrroute/version.py`. The release notes now describe the Full edition files.
 
 ## 0.7.0 - 2026-09-25
 

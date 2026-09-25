@@ -10,6 +10,10 @@ on:
         description: "Build single-file executables"
         type: boolean
         default: false
+      publish:
+        description: "Publish a GitHub release v<version> from this run (version read from ocrroute/version.py)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -198,10 +202,25 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Runs for a pushed version tag (git tag v0.7.1 && git push origin v0.7.1), or for "Run workflow" with
+    # "publish" ticked. Needs every build job to succeed: a release is never published with platforms missing.
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - name: Release tag must match the code version
+        id: tag
+        run: |
+          VERSION=$(sed -n "s/^__version__ *= *['\"]\([^'\"]*\)['\"].*/\1/p" ocrroute/version.py)
+          [ -n "${VERSION}" ] || { echo "::error::could not read __version__ from ocrroute/version.py"; exit 1; }
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then TAG="${GITHUB_REF_NAME}"; else TAG="v${VERSION}"; fi
+          if [ "${TAG}" != "v${VERSION}" ]; then
+            echo "::error::tag ${TAG} does not match ocrroute/version.py (${VERSION}); tag v${VERSION} instead, or bump the version first"
+            exit 1
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Publishing ${TAG}"
       - uses: actions/download-artifact@v4
         with:
           path: release
@@ -215,15 +234,18 @@ jobs:
       - name: GitHub Release with executables
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}  # "Run workflow" creates the tag on the commit that was built
           files: release/*
           generate_release_notes: true
           body: |
             Stand-alone executables built by CI for Windows, macOS (Intel & Apple silicon) and Linux.
             `ocrroute-server-*` = CLI + API + web control panel (double-click starts the server on http://127.0.0.1:20256).
             `ocrroute-desktop-*` = PyQt5 desktop app with the embedded server.
+            `*-full-*` = Full edition: adds EasyOCR, Surya and PaddleOCR (Intel Macs: PaddleOCR only). Much larger.
             Binaries are unsigned: macOS Gatekeeper / Windows SmartScreen may warn on first launch.
       - name: Release links in summary
         run: |
-          echo "### 🚀 Release ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
-          for f in release/*; do echo "- https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"; done
+          echo "### 🚀 Release ${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+          for f in release/*; do echo "- https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"; done
