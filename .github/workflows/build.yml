@@ -14,6 +14,10 @@ on:
         description: "Publish a GitHub release v<version> from this run (version read from ocrroute/version.py)"
         type: boolean
         default: false
+      allow_incomplete:
+        description: "With publish: release whatever built successfully, as a pre-release (default: all builds must pass)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -203,8 +207,13 @@ jobs:
   release:
     name: Publish release
     # Runs for a pushed version tag (git tag v0.7.1 && git push origin v0.7.1), or for "Run workflow" with
-    # "publish" ticked. Needs every build job to succeed: a release is never published with platforms missing.
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    # "publish" ticked. By default every build job must succeed. NOTE: an `if:` without a status function gets an
+    # implicit success(), which silently skips this job when any build fails, so the status is spelled out here and
+    # the "Why no release?" job explains every skip in the run summary.
+    if: >-
+      always() && !cancelled() &&
+      (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish)) &&
+      (needs.build.result == 'success' || (github.event_name == 'workflow_dispatch' && inputs.allow_incomplete))
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -224,7 +233,17 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: release
+          pattern: ocrroute-*        # build outputs only: never the verify-logs-* diagnostics of failed jobs
           merge-multiple: true
+      - name: Anything to publish?
+        id: contents
+        run: |
+          ls -la release || true
+          COUNT=$(find release -type f 2>/dev/null | wc -l | tr -d ' ')
+          [ "${COUNT}" -gt 0 ] || { echo "::error::no build produced files: nothing to publish"; exit 1; }
+          FOUND=$(ls release | sed -E 's/^(ocrroute-(server|desktop)(-full)?)-[0-9][^-]*-/\1 /' | sort -u | tr '\n' ';')
+          echo "found=${FOUND}" >> "$GITHUB_OUTPUT"
+          echo "incomplete=${{ needs.build.result != 'success' }}" >> "$GITHUB_OUTPUT"
       - name: Size guard (GitHub release files must be < 2 GiB)
         run: |
           find release -type f -size +1900M -print | tee too-big.txt
@@ -236,6 +255,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}  # "Run workflow" creates the tag on the commit that was built
+          prerelease: ${{ steps.contents.outputs.incomplete == 'true' }}
           files: release/*
           generate_release_notes: true
           body: |
@@ -244,8 +264,45 @@ jobs:
             `ocrroute-desktop-*` = PyQt5 desktop app with the embedded server.
             `*-full-*` = Full edition: adds EasyOCR, Surya and PaddleOCR (Intel Macs: PaddleOCR only). Much larger.
             Binaries are unsigned: macOS Gatekeeper / Windows SmartScreen may warn on first launch.
+            ${{ steps.contents.outputs.incomplete == 'true' && '**Incomplete pre-release**: published with "allow_incomplete" while some build jobs failed; only the files attached below were built. See the workflow run for the missing platforms.' || '' }}
       - name: Release links in summary
         run: |
           echo "### 🚀 Release ${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           for f in release/*; do echo "- https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"; done
+
+  release-gate:
+    name: Why no release?
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain the release decision
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          PUBLISH: ${{ inputs.publish }}
+          ALLOW_INCOMPLETE: ${{ inputs.allow_incomplete }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          if [ "${REF#refs/tags/v}" != "${REF}" ] || { [ "${EVENT}" = "workflow_dispatch" ] && [ "${PUBLISH}" = "true" ]; }; then
+            WANTED=yes; else WANTED=no; fi
+          {
+            echo "### Release decision"
+            echo "- event: \`${EVENT}\`, ref: \`${REF}\`, publish: \`${PUBLISH:-n/a}\`, allow_incomplete: \`${ALLOW_INCOMPLETE:-n/a}\`"
+            echo "- build jobs overall: \`${BUILD}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${WANTED}" = "no" ]; then
+            MSG="No release requested: this was a ${EVENT} on ${REF}. Push a tag (git tag vX.Y.Z && git push origin vX.Y.Z) or use Run workflow with 'publish' ticked."
+            echo "::notice title=Release skipped::${MSG}"
+          elif [ "${BUILD}" = "success" ]; then
+            MSG="Release requested and every build succeeded: the 'Publish release' job publishes it."
+            echo "::notice title=Release::${MSG}"
+          elif [ "${ALLOW_INCOMPLETE}" = "true" ]; then
+            MSG="Release requested with allow_incomplete while builds ended '${BUILD}': publishing the builds that succeeded as a pre-release."
+            echo "::warning title=Incomplete release::${MSG}"
+          else
+            MSG="Release requested, but the build jobs ended '${BUILD}': at least one platform failed or was cancelled, so nothing was published. Fix the failing job (see its log), or use Run workflow with 'publish' and 'allow_incomplete' ticked."
+            echo "::error title=Release not published::${MSG}"
+          fi
+          echo "- **${MSG}**" >> "$GITHUB_STEP_SUMMARY"
