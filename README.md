@@ -45,6 +45,11 @@ metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`)
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
 
+## Several servers
+
+Run one **leader** and any number of **followers**: followers mirror the leader's providers, credentials, routes,
+API keys and users. See `docs/CLUSTER.md`.
+
 ## Editions and more engines
 
 The stand-alone executables come in two editions:

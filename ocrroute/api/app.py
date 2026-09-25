@@ -24,6 +24,8 @@ from ocrroute.logsetup import getLogger, redact
 from ocrroute.runtime.context import buildContext, getContext
 from ocrroute.runtime.jobs import JobRunner
 from ocrroute.runtime.maintenance import Scheduler
+from ocrroute.sync import MANAGED_PREFIXES
+from ocrroute.sync import validate as syncValidate
 from ocrroute.version import __version__
 
 log = getLogger(__name__)
@@ -76,6 +78,19 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
             ctx.executor.events.append(_runMetric)
         _scheduler = Scheduler(settings)
         _scheduler.start()
+        app.state.follower = None
+        problems = syncValidate(settings)
+        if problems:
+            log.error('cluster sync disabled: invalid configuration', problems=problems)
+        elif settings.sync_role == 'follower':
+            from ocrroute.db.session import sessionScope
+            from ocrroute.sync import Follower
+
+            app.state.follower = Follower(settings, sessionScope, ctx.secrets)
+            app.state.follower.start()
+            log.info('cluster sync: following', leader=settings.sync_leader_url)
+        elif settings.sync_role == 'leader':
+            log.info('cluster sync: serving snapshots to followers')
         log.info(
             'ocrroute started',
             version=__version__,
@@ -84,6 +99,8 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
             engines=len(ctx.registry.available()),
         )
         yield
+        if getattr(app.state, 'follower', None) is not None:
+            app.state.follower.stop()
         if _scheduler:
             _scheduler.stop()
 
@@ -97,6 +114,18 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
         openapi_url='/v1/openapi.json' if include_api else None,
         redoc_url=None,
     )
+
+    @app.middleware('http')
+    async def followerReadOnly(request, call_next):
+        """A follower mirrors its leader: configuration edits here would be overwritten at the next sync."""
+        if (settings.sync_role == 'follower' and request.method not in ('GET', 'HEAD', 'OPTIONS')
+                and request.url.path.startswith(MANAGED_PREFIXES)):
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse({'status': 'failed', 'error_code': 'conflict', 'error_message':
+                                 'This server follows {} (cluster sync): change configuration on the leader.'.format(
+                                     settings.sync_leader_url)}, status_code=409)
+        return await call_next(request)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -160,7 +189,10 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
         )
 
     if include_api:
-        for r in (system.router, ocr.router, runs.router, jobs.router, admin.router, tools.router, endpoints.router, users.router):
+        from ocrroute.api.routers import sync as syncRouter
+
+        for r in (system.router, ocr.router, runs.router, jobs.router, admin.router, tools.router, endpoints.router, users.router,
+                  syncRouter.router):
             app.include_router(r, prefix='/v1')
 
         @app.get('/metrics', include_in_schema=False)

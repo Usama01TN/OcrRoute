@@ -142,6 +142,30 @@ def _editionInfo():
     return {'edition': i['edition'], 'bundled_extra_engines': i['bundled_extra_engines']}
 
 
+sync_app = typer.Typer(help='Cluster sync: one leader, many followers.')
+app.add_typer(sync_app, name='sync')
+
+
+@sync_app.command('token')
+def syncToken() -> None:
+    """Print a new random sync token (use the same value on the leader and every follower)."""
+    from ocrroute.sync import newToken
+
+    console.print(newToken())
+
+
+@sync_app.command('status')
+def syncStatus(url: str = typer.Option('', help='Server to ask (default: this machine)'), key: str = typer.Option('', envvar='OCRROUTE_API_KEY'),
+               as_json: bool = JSON_OPT) -> None:
+    """Show this server's sync role, problems and last result (needs an admin API key)."""
+    import requests
+
+    settings = getSettings()
+    base = url or 'http://127.0.0.1:{}'.format(settings.port)
+    r = requests.get(base.rstrip('/') + '/v1/sync/status', headers={'Authorization': 'Bearer ' + key}, timeout=10)
+    _out(r.json(), as_json, lambda d: console.print_json(json.dumps(d)))
+
+
 @app.command()
 def version(as_json: bool = JSON_OPT) -> None:
     """Print the version."""

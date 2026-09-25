@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     breaker_threshold: int = 5
     breaker_cooldown_seconds: int = 120
 
+    # cluster sync (see ocrroute/sync.py): off | leader | follower. Local to each server, never synchronised.
+    sync_role: str = 'off'
+    sync_token: str = ''  # shared secret, same on the leader and every follower (>= 24 chars)
+    sync_leader_url: str = ''  # followers: the leader's base URL, e.g. https://ocr-1.example.com
+    sync_interval_seconds: int = 30
     auto_seed_providers: bool = True  # create a provider row for every available engine automatically
     engine_rescan_minutes: int = 10  # 0 disables periodic detection of new/repaired engines
     default_language: str = "en"  # UI language: en | fr | es | de | ar

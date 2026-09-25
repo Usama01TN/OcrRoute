@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0 - 2026-09-25
+
+- **Cluster sync** (`docs/CLUSTER.md`): one leader, any number of followers. Followers mirror providers, credentials,
+  routes, API keys, panel users, runtime settings and engine enablement; runs, usage, cache, logs and health stay per
+  server. Configure with `OCRROUTE_SYNC_ROLE`, `OCRROUTE_SYNC_TOKEN`, `OCRROUTE_SYNC_LEADER_URL`,
+  `OCRROUTE_SYNC_INTERVAL_SECONDS`; `ocrroute sync token` generates a token.
+- Secrets travel encrypted with a key derived from the sync token and are re-encrypted with each follower's own
+  master key. ETag digests make unchanged polls a `304`; failures back off.
+- Followers refuse configuration edits (`409`, naming the leader) and do not auto-seed providers.
+- API: `GET /v1/sync/snapshot` (sync token), `GET /v1/sync/status`, `POST /v1/sync/now` (admin). CLI: `ocrroute sync status`.
+- End-to-end test with a real leader and follower process: data, deletions, a re-encrypted credential used in a real
+  OCR request, the read-only guard, and a follower with a wrong token.
+
 ## 0.6.1 - 2026-09-25
 
 - **OmniRoute engine integrated** (`AioOCR/engines/api/omniroute.py`, class `OmniRouteOcr`). OcrRoute's catalog now
