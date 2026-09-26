@@ -47,6 +47,21 @@ tunnels on the other servers serve OCR clients and play no part in sync. Behind 
   private and regenerate it if it leaks. A Cloudflare Access login in front of the leader blocks followers too:
   exclude `/v1/sync/*` from that policy, or sync over Tailscale.
 
+## Server cards (leader)
+
+On the leader, **Cluster sync > Servers** shows one card per follower: name, host, address, version, last contact and
+status (up to date, behind, paused, offline after 5 minutes without contact, never connected).
+
+- **Add server** creates a card with **its own token**, shown once with the leader address to paste on that server.
+  Only a hash of the token is stored.
+- **Edit** renames the card and sets notes. **Pause / Resume** stops or restarts sending configuration to that server
+  (it reports "paused" in its status). **New token** replaces a leaked token (the server stops syncing until it gets
+  the new one). **Delete** revokes the server: its own token stops working, and a server that used the shared token
+  is refused by its server id; add a new card to let it back in.
+- Servers using the shared token appear as cards automatically. Each server's secrets travel encrypted with the token
+  it uses, so revoking one server never exposes the others.
+- API: `GET/POST /v1/sync/nodes`, `PATCH/DELETE /v1/sync/nodes/{key}`.
+
 ## Set up with .env (alternative)
 
 `.env` / environment variables take priority over the dashboard: when they set sync, the Cluster sync page is

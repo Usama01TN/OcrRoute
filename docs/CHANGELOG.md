@@ -14,6 +14,15 @@
   URL, LAN) and flags temporary tunnel URLs (`*.trycloudflare.com`, `*.ngrok-free.app`) that change on restart; the
   127.0.0.1 warning no longer shows when a tunnel is up. Followers identify themselves on every poll (server id, name,
   version, digest) and the leader lists them with last contact and up-to-date status.
+- **Server cards with full CRUD** on the leader's Cluster sync page: add a server (its own token, shown once), edit
+  (name, notes), pause / resume, new token, delete (revokes it; shared-token servers are refused by server id). Shared-
+  token followers appear as cards automatically; secrets travel encrypted with each server's own token.
+- **Fix: `UNIQUE constraint failed: users.username` during sync** when a follower had a local panel user (or provider,
+  route, key) with the same unique value as a leader row under another id: local rows missing on the leader are now
+  removed and flushed before the leader's rows are inserted.
+- **Fix: the Cluster sync page switched back to the saved role every 10 seconds** (e.g. "Leader") while you were editing:
+  the periodic refresh now updates only the status and server cards, never the form, and pauses while there are unsaved
+  edits. Followers explain refusals from the leader (paused, removed, token replaced).
 - Fix: `server_id` (Endpoints page) was the same for every installation on a host because it read a misnamed settings
   attribute and fell back to the hostname; it now derives from the secret key file (or the home path).
 - **Automatic releases**: a push to `main` whose `ocrroute/version.py` carries a version without a `v<version>` tag is
