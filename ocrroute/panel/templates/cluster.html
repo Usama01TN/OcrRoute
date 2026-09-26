@@ -27,10 +27,23 @@
       <div><label class="form-label">{{ _('Leader address for followers') }}</label>
         <div class="form-text mb-1">{{ _('Give followers the first address below. Behind a tunnel the leader needs neither 0.0.0.0 nor a firewall rule: only the leader needs a public address, followers connect out to it.') }}</div>
         <div id="addresses" class="d-grid gap-1"></div></div>
-      <div><label class="form-label">{{ _('Followers') }}</label>
-        <div class="form-text mb-1">{{ _('Every server that syncs from this leader, seen from their last poll.') }}</div>
-        <div class="table-responsive"><table class="table table-sm small mb-0" id="followers"><thead><tr><th>{{ _('Name') }}</th><th>{{ _('From') }}</th><th>{{ _('Version') }}</th><th>{{ _('Last contact') }}</th><th>{{ _('Status') }}</th></tr></thead><tbody></tbody></table></div>
-        <div id="no-followers" class="small text-muted">{{ _('No follower has contacted this leader yet.') }}</div></div>
+      <div>
+        <div class="d-flex align-items-center mb-1"><label class="form-label mb-0">{{ _('Servers') }}</label>
+          <button class="btn btn-sm btn-grad ms-auto" id="add-node" type="button"><i class="bi bi-plus-lg me-1"></i>{{ _('Add server') }}</button></div>
+        <div class="form-text mb-2">{{ _('One card per follower. A card created here has its own token: pause it, rotate it or delete it without touching the other servers. Servers using the shared token appear automatically.') }}</div>
+        <div id="node-form" class="card p-3 mb-2 d-none"><div class="row g-2">
+          <div class="col-12 col-md-4"><input class="form-control" id="node-label" maxlength="80" placeholder="{{ _('Name, e.g. ocr-paris-2') }}"></div>
+          <div class="col-12 col-md-5"><input class="form-control" id="node-notes" maxlength="500" placeholder="{{ _('Notes (optional)') }}"></div>
+          <div class="col-12 col-md-3 d-flex gap-2"><button class="btn btn-grad flex-fill" id="node-save" type="button">{{ _('Create') }}</button><button class="btn btn-outline-secondary" id="node-cancel" type="button">{{ _('Cancel') }}</button></div>
+        </div></div>
+        <div id="node-token" class="alert alert-success d-none"><div class="fw-semibold mb-1"><i class="bi bi-key me-1"></i><span id="node-token-title"></span></div>
+          <div class="small mb-2">{{ _('Copy it now: it is shown only once. On that server, open Cluster sync, choose Follower, and paste:') }}</div>
+          <div class="input-group input-group-sm mb-1"><span class="input-group-text">{{ _('Leader address') }}</span><input class="form-control font-monospace" id="node-token-url" readonly><button class="btn btn-outline-secondary copy-field" data-f="node-token-url" type="button"><i class="bi bi-clipboard"></i></button></div>
+          <div class="input-group input-group-sm"><span class="input-group-text">{{ _('Sync token') }}</span><input class="form-control font-monospace" id="node-token-value" readonly><button class="btn btn-outline-secondary copy-field" data-f="node-token-value" type="button"><i class="bi bi-clipboard"></i></button></div>
+          <button class="btn btn-sm btn-outline-secondary mt-2" id="node-token-close" type="button">{{ _('Done') }}</button></div>
+        <div class="row g-2" id="nodes"></div>
+        <div id="no-followers" class="small text-muted">{{ _('No server yet: add one, or give a follower the shared token above.') }}</div>
+      </div>
     </div>
   </div>
 
@@ -56,47 +69,35 @@
 {% block scripts %}<script>
 document.addEventListener("DOMContentLoaded", () => {
   const {api, toast} = OcrRoute, $ = (s) => document.querySelector(s), T = (k) => (window.I18N && window.I18N[k]) || k;
-  let cfg = null, poll = null;
+  let cfg = null, poll = null, dirty = false;
   const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   function role() { return (document.querySelector("input[name=role]:checked") || {}).value || "off"; }
   function show() {
     const r = role();
     $("#leader-card").classList.toggle("d-none", r !== "leader");
     $("#follower-card").classList.toggle("d-none", r !== "follower");
-    $("#status-card").classList.toggle("d-none", !(cfg && cfg.role === "follower"));
     document.querySelectorAll(".role-card").forEach((c) => c.classList.toggle("border-primary", c.querySelector("input").value === r));
   }
-  function fill(c) {
-    cfg = c;
-    document.querySelectorAll("input[name=role]").forEach((i) => { i.checked = i.value === c.role; i.disabled = c.source === "environment"; });
-    $("#env-note").classList.toggle("d-none", c.source !== "environment");
-    ["#save", "#new-token", "#leader-url", "#follower-token", "#interval"].forEach((s) => { $(s).disabled = c.source === "environment"; });
-    $("#leader-token").value = c.role === "leader" ? c.token : "";
-    $("#host-warning").classList.toggle("d-none", c.reachable_from_network || c.has_public_address);
-    const addrs = (c.public_addresses && c.public_addresses.length) ? c.public_addresses : c.addresses.map((u) => ({url: u, label: "LAN", stable: true, note: ""}));
-    $("#addresses").innerHTML = addrs.map((a) =>
-      `<div><div class="input-group input-group-sm"><span class="input-group-text">${esc(a.label)}</span><input class="form-control font-monospace" readonly value="${esc(a.url)}"><button class="btn btn-outline-secondary copy-addr" data-v="${esc(a.url)}" type="button"><i class="bi bi-clipboard"></i></button></div>` +
-      (a.note ? `<div class="form-text ${a.stable ? "" : "text-warning"}"><i class="bi bi-${a.stable ? "check2" : "exclamation-triangle"} me-1"></i>${esc(a.note)}</div>` : "") + `</div>`).join("");
-    const fl = c.followers || [];
-    $("#no-followers").classList.toggle("d-none", fl.length > 0);
-    $("#followers tbody").innerHTML = fl.map((f) => `<tr><td>${esc(f.name)}</td><td class="font-monospace">${esc(f.ip)}</td><td>${esc(f.version || "-")}</td><td>${esc((f.last_seen || "").replace("T", " ").slice(0, 19))}</td><td>${f.up_to_date ? '<span class="status healthy">' + T("up to date") + '</span>' : '<span class="status degraded">' + T("behind") + '</span>'}</td></tr>`).join("");
+  function renderNodes(c) {
     document.querySelectorAll(".copy-addr").forEach((b) => b.onclick = () => { navigator.clipboard.writeText(b.dataset.v); toast(T("Copied")); });
     if (c.role === "follower") { $("#leader-url").value = c.leader_url; $("#follower-token").value = c.token; $("#interval").value = c.interval_seconds; }
     $("#problems").textContent = (c.problems || []).join(" ");
-    const st = c.state;
-    if (st) {
-      const row = (k, v) => `<tr><td class="text-muted">${esc(k)}</td><td>${v}</td></tr>`;
-      const changes = st.last_result ? Object.entries(st.last_result.upserted || {}).map(([k, n]) => `${esc(k)}: ${n}`).join(" · ") : "-";
-      $("#status").innerHTML = row(T("Leader"), esc(c.leader_url)) +
-        row(T("Last successful sync"), esc(st.last_success_at || "-")) + row(T("Last change applied"), esc(st.last_change_at || "-")) +
-        row(T("Error"), st.last_error ? `<span class="text-danger">${esc(st.last_error)}</span>` : `<span class="status healthy">OK</span>`) +
-        row(T("Copied from the leader"), changes) +
-        (st.last_result && st.last_result.skipped && st.last_result.skipped.length ? row(T("Skipped"), esc(st.last_result.skipped.join("; "))) : "");
-    }
+    renderStatus(c);
     show();
   }
   async function load() { try { fill(await api("GET", "/v1/sync/config")); } catch (e) { toast(e.message, true); } }
-  document.querySelectorAll("input[name=role]").forEach((i) => i.addEventListener("change", show));
+  document.querySelectorAll("input[name=role]").forEach((i) => i.addEventListener("change", () => { dirty = true; show(); }));
+  ["#leader-url", "#follower-token", "#interval"].forEach((s) => $(s).addEventListener("input", () => { dirty = true; }));
+  $("#add-node").onclick = () => { $("#node-form").classList.remove("d-none"); $("#node-label").focus(); };
+  $("#node-cancel").onclick = () => $("#node-form").classList.add("d-none");
+  $("#node-save").onclick = async () => {
+    const label = $("#node-label").value.trim(); if (!label) { $("#node-label").focus(); return; }
+    try { const r = await api("POST", "/v1/sync/nodes", {label, notes: $("#node-notes").value});
+      $("#node-form").classList.add("d-none"); $("#node-label").value = ""; $("#node-notes").value = ""; await refresh(); showToken(label, r.token); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("#node-token-close").onclick = () => { $("#node-token").classList.add("d-none"); $("#node-token-value").value = ""; };
+  document.querySelectorAll(".copy-field").forEach((b) => b.onclick = () => { navigator.clipboard.writeText($("#" + b.dataset.f).value); toast(T("Copied")); });
   $("#copy-token").onclick = () => { if ($("#leader-token").value) { navigator.clipboard.writeText($("#leader-token").value); toast(T("Copied")); } };
   $("#new-token").onclick = async () => { const r = await api("POST", "/v1/sync/token"); $("#leader-token").value = r.token; toast(T("Save to apply the new token")); };
   $("#test").onclick = async () => {
@@ -113,8 +114,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (r === "follower") { body.leader_url = $("#leader-url").value; body.token = $("#follower-token").value; }
     try { fill(await api("PUT", "/v1/sync/config", body)); toast(T("Saved")); } catch (e) { $("#problems").textContent = e.message; toast(e.message, true); }
   };
-  $("#sync-now").onclick = async () => { try { await api("POST", "/v1/sync/now"); await load(); toast(T("Saved")); } catch (e) { toast(e.message, true); } };
+  $("#sync-now").onclick = async () => { try { await api("POST", "/v1/sync/now"); await refresh(); toast(T("Saved")); } catch (e) { toast(e.message, true); } };
   load();
-  poll = setInterval(() => { if (cfg && cfg.role !== "off") load(); }, 10000);
+  poll = setInterval(() => { if (cfg && cfg.role !== "off" && !dirty) refresh(); }, 10000);
 });
 </script>{% endblock %}

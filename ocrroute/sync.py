@@ -146,19 +146,37 @@ def applySnapshot(db, secrets, token, snapshot):
     data = snapshot['data']
     knownEngines = {e.id for e in db.query(Engine).all()}
     upserted, removed, skipped = {}, {}, []
-    keep = {}
+    # Which leader rows this server will hold (providers of engines not installed here are skipped, with their
+    # credentials and route members).
     skippedProviders = set()
+    for row in data.get('providers', []):
+        if row.get('engine_id') not in knownEngines:
+            skippedProviders.add(row['id'])
+            skipped.append('provider {} ({}): engine {} is not installed here'.format(
+                row.get('label'), row['id'], row.get('engine_id')))
+    wanted = {}
+    for name, _model, _exclude, _secret in SPEC:
+        rows = data.get(name, [])
+        if name == 'providers':
+            rows = [r for r in rows if r['id'] not in skippedProviders]
+        elif name in ('credentials', 'route_members'):
+            rows = [r for r in rows if r.get('provider_id') not in skippedProviders]
+        wanted[name] = rows
+    # 1. Remove local rows the leader does not have, children first, and flush BEFORE inserting: a local row with
+    #    the same unique value as a leader row (a panel user "admin" created on both servers, a provider label, a
+    #    route name...) would otherwise collide ("UNIQUE constraint failed") while both briefly exist.
+    for name, model, _exclude, _secret in reversed(SPEC):
+        keep = {r['id'] for r in wanted[name]}
+        gone = [obj for obj in db.query(model).all() if obj.id not in keep]
+        for obj in gone:
+            db.delete(obj)
+        removed[name] = len(gone)
+        db.flush()
+    # 2. Insert / update the leader's rows, parents first.
     for name, model, exclude, secretCols in SPEC:
         cols = {c.name: c for c in _columns(model, exclude)}
-        count, ids = 0, set()
-        for row in data.get(name, []):
-            if name == 'providers' and row.get('engine_id') not in knownEngines:
-                skippedProviders.add(row['id'])
-                skipped.append('provider {} ({}): engine {} is not installed here'.format(
-                    row.get('label'), row['id'], row.get('engine_id')))
-                continue
-            if name in ('credentials', 'route_members') and row.get('provider_id') in skippedProviders:
-                continue
+        count = 0
+        for row in wanted[name]:
             values = {}
             for key, value in row.items():
                 col = cols.get(key)
@@ -177,18 +195,9 @@ def applySnapshot(db, secrets, token, snapshot):
             else:
                 for key, value in values.items():
                     setattr(obj, key, value)
-            ids.add(values['id'])
             count += 1
         db.flush()
-        keep[name] = ids
         upserted[name] = count
-    # Mirror deletions, children first (route members / credentials / keys before the routes and providers).
-    for name, model, _exclude, _secret in reversed(SPEC):
-        gone = [obj for obj in db.query(model).all() if obj.id not in keep[name]]
-        for obj in gone:
-            db.delete(obj)
-        removed[name] = len(gone)
-        db.flush()
     incoming = {k: v for k, v in (data.get('settings') or {}).items() if not _isLocalSetting(k)}
     for key, value in incoming.items():
         row = db.get(Setting, key)
@@ -253,7 +262,13 @@ class Follower(object):
                                       consecutive_failures=0)
                     return dict(self.state)
                 if r.status_code == 401:
-                    raise RuntimeError('the leader rejected the sync token (OCRROUTE_SYNC_TOKEN must match)')
+                    raise RuntimeError('the leader rejected the sync token (copy it again from the leader)')
+                if r.status_code == 403:
+                    try:
+                        why = r.json().get('error_message') or 'refused'
+                    except ValueError:
+                        why = 'refused'
+                    raise RuntimeError(why)
                 if r.status_code == 404:
                     raise RuntimeError('{} is not a sync leader (set OCRROUTE_SYNC_ROLE=leader there)'.format(
                         self.settings.sync_leader_url))
@@ -392,6 +407,12 @@ def testLeader(url, token, http=None):
                                         '(not 127.0.0.1) and the firewall.'.format(url, type(exc).__name__), 'counts': {}}
     if r.status_code == 401:
         return {'ok': False, 'message': 'The leader rejected the token: copy the exact token from the leader.', 'counts': {}}
+    if r.status_code == 403:
+        try:
+            why = r.json().get('error_message')
+        except ValueError:
+            why = None
+        return {'ok': False, 'message': why or 'The leader refuses this server.', 'counts': {}}
     if r.status_code == 404:
         return {'ok': False, 'message': '{} answered, but it is not a sync leader: set its role to Leader.'.format(url),
                 'counts': {}}
@@ -569,3 +590,169 @@ def recordFollower(manager, ip, header, currentDigest):
 
 
 __all__ += ['NODE_HEADER', 'classifyAddress', 'nodeIdentity', 'publicAddresses', 'recordFollower']
+
+
+# --------------------------------------------------------------------------------------------------------------- #
+# server cards on the leader: one card per follower, each with its own revocable token                            #
+# --------------------------------------------------------------------------------------------------------------- #
+NODES_KEY = 'sync.nodes'          # leader-local (the "sync." prefix is never synchronised)
+OFFLINE_AFTER_SECONDS = 300
+
+
+class SyncRefused(Exception):
+    """A poll the leader refuses; ``status`` is the HTTP status to answer."""
+
+    def __init__(self, status, message):
+        Exception.__init__(self, message)
+        self.status = status
+
+
+def hashToken(token):
+    return hashlib.sha256(('ocrroute-node:' + (token or '')).encode('utf-8')).hexdigest()
+
+
+def loadNodes(db):
+    row = db.get(Setting, NODES_KEY)
+    data = row.value_json if row is not None and isinstance(row.value_json, dict) else {}
+    return {'nodes': dict(data.get('nodes') or {}), 'revoked': list(data.get('revoked') or [])}
+
+
+def saveNodes(db, reg):
+    row = db.get(Setting, NODES_KEY)
+    value = {'nodes': reg['nodes'], 'revoked': reg['revoked']}
+    if row is None:
+        db.add(Setting(key=NODES_KEY, value_json=value))
+    else:
+        row.value_json = dict(value)  # a new object, so SQLAlchemy sees the change
+
+
+def _newKey():
+    import secrets as _s
+
+    return 'srv_' + _s.token_hex(6)
+
+
+def createNode(db, label, notes=''):
+    """
+    :return: tuple(dict, str)  the card and its token (shown once: only a hash is stored)
+    """
+    reg = loadNodes(db)
+    token = newToken()
+    key = _newKey()
+    reg['nodes'][key] = {'key': key, 'label': (label or 'Server').strip()[:80], 'notes': (notes or '')[:500],
+                         'token_hash': hashToken(token), 'paused': False, 'created_at': datetime.now(timezone.utc).isoformat(),
+                         'server_id': '', 'name': '', 'ip': '', 'version': '', 'last_seen': '', 'first_seen': '', 'digest': ''}
+    saveNodes(db, reg)
+    return reg['nodes'][key], token
+
+
+def updateNode(db, key, label=None, notes=None, paused=None, regenerate=False):
+    """
+    :return: tuple(dict, str | None)  the card, and the new token when ``regenerate``
+    """
+    reg = loadNodes(db)
+    node = reg['nodes'].get(key)
+    if node is None:
+        raise KeyError(key)
+    if label is not None:
+        node['label'] = label.strip()[:80] or node['label']
+    if notes is not None:
+        node['notes'] = notes[:500]
+    if paused is not None:
+        node['paused'] = bool(paused)
+    token = None
+    if regenerate:
+        token = newToken()
+        node['token_hash'] = hashToken(token)
+    saveNodes(db, reg)
+    return node, token
+
+
+def deleteNode(db, key):
+    """Remove a card and revoke that server: its own token stops working, and if it used the shared token its server
+    id is refused too (create a new card to let it back in)."""
+    reg = loadNodes(db)
+    node = reg['nodes'].pop(key, None)
+    if node is None:
+        raise KeyError(key)
+    if node.get('server_id') and node['server_id'] not in reg['revoked']:
+        reg['revoked'].append(node['server_id'])
+    saveNodes(db, reg)
+    return node
+
+
+def authenticatePoll(db, sharedToken, presented, info):
+    """
+    Decide whether a follower's poll is allowed, and on which card it lands.
+
+    :param presented: str  token the follower sent
+    :param info: dict  the follower's identity header (id, name, version, digest)
+    :return: str  card key
+    :raises SyncRefused: 401 unknown token, 403 paused or removed
+    """
+    reg = loadNodes(db)
+    serverId = str(info.get('id') or '')
+    hashed = hashToken(presented)
+    for key, node in reg['nodes'].items():
+        if node.get('token_hash') and hmac.compare_digest(node['token_hash'], hashed):
+            if node.get('paused'):
+                raise SyncRefused(403, 'The leader paused sync for this server ("{}").'.format(node['label']))
+            if serverId in reg['revoked']:  # a new card's token lets a removed server back in
+                reg['revoked'].remove(serverId)
+                saveNodes(db, reg)
+            return key
+    if tokenMatches(sharedToken, presented):
+        if serverId and serverId in reg['revoked']:
+            raise SyncRefused(403, 'The leader removed this server from the cluster. Ask for a new server token.')
+        for key, node in reg['nodes'].items():
+            if serverId and node.get('server_id') == serverId and not node.get('token_hash'):
+                if node.get('paused'):
+                    raise SyncRefused(403, 'The leader paused sync for this server ("{}").'.format(node['label']))
+                return key
+        key = _newKey()  # a server using the shared token appears as a card automatically
+        reg['nodes'][key] = {'key': key, 'label': str(info.get('name') or 'Server')[:80], 'notes': '', 'token_hash': '',
+                             'paused': False, 'created_at': datetime.now(timezone.utc).isoformat(), 'server_id': serverId,
+                             'name': '', 'ip': '', 'version': '', 'last_seen': '', 'first_seen': '', 'digest': ''}
+        saveNodes(db, reg)
+        return key
+    raise SyncRefused(401, 'invalid sync token')
+
+
+def recordPoll(db, key, info, ip, currentDigest):
+    reg = loadNodes(db)
+    node = reg['nodes'].get(key)
+    if node is None:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    node.update(server_id=str(info.get('id') or node.get('server_id') or ''), name=str(info.get('name') or ''),
+                ip=ip, version=str(info.get('version') or ''), last_seen=now, first_seen=node.get('first_seen') or now,
+                digest=str(info.get('digest') or ''))
+    node['up_to_date'] = bool(node['digest']) and node['digest'] == currentDigest
+    saveNodes(db, reg)
+
+
+def nodeStatus(node, now=None):
+    """
+    :return: str  never | paused | offline | behind | up_to_date
+    """
+    if node.get('paused'):
+        return 'paused'
+    if not node.get('last_seen'):
+        return 'never'
+    now = now or datetime.now(timezone.utc)
+    if (now - datetime.fromisoformat(node['last_seen'])).total_seconds() > OFFLINE_AFTER_SECONDS:
+        return 'offline'
+    return 'up_to_date' if node.get('up_to_date') else 'behind'
+
+
+def listNodes(db):
+    out = []
+    for node in loadNodes(db)['nodes'].values():
+        view = {k: v for k, v in node.items() if k != 'token_hash'}
+        view['own_token'] = bool(node.get('token_hash'))
+        view['status'] = nodeStatus(node)
+        out.append(view)
+    return sorted(out, key=lambda n: (n['label'] or '').lower())
+
+
+__all__ += ['SyncRefused', 'authenticatePoll', 'createNode', 'deleteNode', 'listNodes', 'recordPoll', 'updateNode']
