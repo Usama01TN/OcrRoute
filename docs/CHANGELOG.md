@@ -6,6 +6,10 @@
   runs on PyQt5, PyQt6, PySide2 or PySide6 (`QT_API`); `pyqtSignal` became the portable `Signal`. The executables ship
   PyQt5 only (`QT_API=pyqt5` pinned, other bindings excluded), and every desktop build now self-tests its Qt layer.
 - README: screenshots (Playground, Engines) and a "Support the project" section (ba9chich, Ko-fi).
+- **Cluster sync from the dashboard**: new **System > Cluster sync** page to choose Off / Leader / Follower and apply it
+  live (no restart): token generation and copy, this server's addresses, a warning when it only listens on 127.0.0.1,
+  **Test connection** before saving, live status and **Sync now**. `.env` settings keep priority (the page is then
+  read-only). API: `GET/PUT /v1/sync/config`, `POST /v1/sync/token`, `POST /v1/sync/test`. Translated into 9 languages.
 - **Automatic releases**: a push to `main` whose `ocrroute/version.py` carries a version without a `v<version>` tag is
   published automatically once every build succeeds (the release creates the tag). Pushes with an already-released
   version publish nothing. To release: bump `__version__`, push. A new "New version?" job checks the tag; the

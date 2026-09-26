@@ -13,7 +13,26 @@ Per server, never synchronised: OCR runs, usage and costs, the result cache, job
 breakers, credential usage counters and quota state, "last used" / "last login" timestamps, and each server's own
 address, port and sync settings.
 
-## Set up
+## Set up from the dashboard (recommended)
+
+On each server, open the web panel, go to **System > Cluster sync**, pick a role and click **Save and apply**. It takes
+effect immediately, without a restart.
+
+1. **Leader** (e.g. `ocr-1`): choose **Leader** and save. A token is generated: click **Copy**. The page also lists the
+   addresses followers should use (e.g. `http://192.168.1.10:20256`).
+2. **Each follower**: choose **Follower**, paste the leader address and the token, click **Test connection** (it shows
+   how many providers, routes and keys the leader shares), then **Save and apply**. The status card shows the last sync,
+   any error and what was copied; **Sync now** forces a sync.
+
+Two things the dashboard cannot change, because they apply when the server starts:
+- The leader must listen on the network: set `OCRROUTE_HOST=0.0.0.0` in its `.env`, restart, and allow port 20256 in
+  the firewall. The page warns when the server only listens on `127.0.0.1`.
+- After the first sync a follower uses the leader's API keys and panel users: sign in with an account from the leader.
+
+## Set up with .env (alternative)
+
+`.env` / environment variables take priority over the dashboard: when they set sync, the Cluster sync page is
+read-only.
 
 ```bash
 ocrroute sync token                      # generate one shared token, e.g. on the leader
