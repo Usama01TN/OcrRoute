@@ -68,3 +68,48 @@ def test_env_configuration_makes_the_page_read_only(tmp_path):
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+def test_leader_lists_many_followers_and_flags_temporary_addresses(tmp_path):
+    lp = _port()
+    lhome = tmp_path / 'leader'
+    lkey = _adminKey(lhome)
+    leader = _serve(lhome, lp)
+    procs = [leader]
+    try:
+        L = 'http://127.0.0.1:{}'.format(lp)
+        _wait(L, leader)
+        LH = {'Authorization': 'Bearer ' + lkey}
+        token = requests.put(L + '/v1/sync/config', json={'role': 'leader'}, headers=LH).json()['token']
+        # a temporary tunnel URL configured as the public URL must be flagged, a LAN address must not
+        r = requests.patch(L + '/v1/endpoints', json={'public_base_url': 'https://random-words.trycloudflare.com'}, headers=LH)
+        assert r.status_code == 200, r.text
+        cfg = requests.get(L + '/v1/sync/config', headers=LH).json()
+        flagged = [a for a in cfg['public_addresses'] if not a['stable']]
+        assert flagged and flagged[0]['url'].startswith('https://random-words.trycloudflare.com') and cfg['has_public_address']
+        assert all(a['stable'] for a in cfg['public_addresses'] if a['kind'] == 'lan')
+        # three followers, each configured from its own dashboard API
+        names = []
+        for i in range(3):
+            fp, fhome = _port(), tmp_path / 'follower{}'.format(i)
+            fkey = _adminKey(fhome)
+            proc = _serve(fhome, fp)
+            procs.append(proc)
+            F = 'http://127.0.0.1:{}'.format(fp)
+            _wait(F, proc)
+            r = requests.put(F + '/v1/sync/config', json={'role': 'follower', 'leader_url': L, 'token': token,
+                                                          'interval_seconds': 1}, headers={'Authorization': 'Bearer ' + fkey})
+            assert r.status_code == 200, r.text
+            names.append(F)
+        followers = _until(lambda: (lambda f: f if len(f) >= 3 and all(x['up_to_date'] for x in f) else None)(
+            requests.get(L + '/v1/sync/config', headers=LH).json()['followers']))
+        assert len(followers) == 3 and all(f['version'] and f['last_seen'] for f in followers)
+        # a follower that stops syncing stays listed with its last contact, and a change makes the others "behind"
+        # until their next poll (they poll every second, so they catch up)
+        requests.post(L + '/v1/providers', json={'engine_id': 'Tesseract', 'label': 'change'}, headers=LH)
+        _until(lambda: all(f['up_to_date'] for f in requests.get(L + '/v1/sync/config', headers=LH).json()['followers']))
+    finally:
+        for p in procs:
+            p.terminate()
+        for p in procs:
+            p.wait(timeout=10)

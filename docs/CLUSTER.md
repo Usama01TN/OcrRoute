@@ -29,6 +29,24 @@ Two things the dashboard cannot change, because they apply when the server start
   the firewall. The page warns when the server only listens on `127.0.0.1`.
 - After the first sync a follower uses the leader's API keys and panel users: sign in with an account from the leader.
 
+## Many servers behind tunnels (ngrok, Cloudflare, Tailscale...)
+
+Only the **leader** needs a public address: followers connect *out* to it, nothing connects in to a follower, so the
+tunnels on the other servers serve OCR clients and play no part in sync. Behind a tunnel the leader needs neither
+`OCRROUTE_HOST=0.0.0.0` nor a firewall rule (the tunnel forwards to `127.0.0.1` on the same machine).
+
+- On the leader, the Cluster sync page lists its addresses best first: running tunnels, the manual public URL, then
+  LAN. Give followers the first one, as `https://...`.
+- **Use a stable address for the leader.** Cloudflare *quick* tunnels (`*.trycloudflare.com`) and free ngrok URLs
+  (`*.ngrok-free.app`) change on every restart; the page flags them. Prefer a Tailscale name (`*.ts.net`, private to
+  your machines), a Cloudflare named tunnel on your own domain, or an ngrok static domain. If the leader's URL does
+  change, update the leader address on every follower (**Test connection** confirms the new one).
+- The leader's page lists every **follower** (name, address, version, last contact, up to date or behind), so all
+  servers are visible in one place.
+- The token is the only secret: anyone with it can read the leader's configuration through the public URL, so keep it
+  private and regenerate it if it leaks. A Cloudflare Access login in front of the leader blocks followers too:
+  exclude `/v1/sync/*` from that policy, or sync over Tailscale.
+
 ## Set up with .env (alternative)
 
 `.env` / environment variables take priority over the dashboard: when they set sync, the Cluster sync page is

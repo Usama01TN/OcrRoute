@@ -10,6 +10,12 @@
   live (no restart): token generation and copy, this server's addresses, a warning when it only listens on 127.0.0.1,
   **Test connection** before saving, live status and **Sync now**. `.env` settings keep priority (the page is then
   read-only). API: `GET/PUT /v1/sync/config`, `POST /v1/sync/token`, `POST /v1/sync/test`. Translated into 9 languages.
+- **Sync across tunnels and many servers**: the leader's page lists its addresses best first (running tunnels, public
+  URL, LAN) and flags temporary tunnel URLs (`*.trycloudflare.com`, `*.ngrok-free.app`) that change on restart; the
+  127.0.0.1 warning no longer shows when a tunnel is up. Followers identify themselves on every poll (server id, name,
+  version, digest) and the leader lists them with last contact and up-to-date status.
+- Fix: `server_id` (Endpoints page) was the same for every installation on a host because it read a misnamed settings
+  attribute and fell back to the hostname; it now derives from the secret key file (or the home path).
 - **Automatic releases**: a push to `main` whose `ocrroute/version.py` carries a version without a `v<version>` tag is
   published automatically once every build succeeds (the release creates the tag). Pushes with an already-released
   version publish nothing. To release: bump `__version__`, push. A new "New version?" job checks the tag; the
