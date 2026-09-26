@@ -24,14 +24,20 @@
           <button class="btn btn-outline-secondary" id="copy-token" type="button"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</button>
           <button class="btn btn-outline-secondary" id="new-token" type="button"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Generate new') }}</button></div>
         <div class="form-text">{{ _('Paste the same token on every follower. Keep it private: it gives read access to this configuration. A new token disconnects followers until they get it.') }}</div></div>
-      <div><label class="form-label">{{ _('Leader address for followers') }}</label><div id="addresses" class="d-grid gap-1"></div></div>
+      <div><label class="form-label">{{ _('Leader address for followers') }}</label>
+        <div class="form-text mb-1">{{ _('Give followers the first address below. Behind a tunnel the leader needs neither 0.0.0.0 nor a firewall rule: only the leader needs a public address, followers connect out to it.') }}</div>
+        <div id="addresses" class="d-grid gap-1"></div></div>
+      <div><label class="form-label">{{ _('Followers') }}</label>
+        <div class="form-text mb-1">{{ _('Every server that syncs from this leader, seen from their last poll.') }}</div>
+        <div class="table-responsive"><table class="table table-sm small mb-0" id="followers"><thead><tr><th>{{ _('Name') }}</th><th>{{ _('From') }}</th><th>{{ _('Version') }}</th><th>{{ _('Last contact') }}</th><th>{{ _('Status') }}</th></tr></thead><tbody></tbody></table></div>
+        <div id="no-followers" class="small text-muted">{{ _('No follower has contacted this leader yet.') }}</div></div>
     </div>
   </div>
 
   <div class="card d-none" id="follower-card"><div class="card-header"><i class="bi bi-arrow-down-circle"></i>{{ _('Follower settings') }}</div>
     <div class="card-body d-grid gap-3">
       <div class="row g-3">
-        <div class="col-12 col-md-6"><label class="form-label">{{ _('Leader address') }}</label><input class="form-control" id="leader-url" placeholder="http://192.168.1.10:20256"></div>
+        <div class="col-12 col-md-6"><label class="form-label">{{ _('Leader address') }}</label><input class="form-control" id="leader-url" placeholder="https://ocr-1.example.com"><div class="form-text">{{ _('The leader\'s tunnel or public URL (https://...), copied from its Cluster sync page. Over the internet, always https.') }}</div></div>
         <div class="col-12 col-md-4"><label class="form-label">{{ _('Sync token') }}</label><input class="form-control font-monospace" id="follower-token" placeholder="{{ _('copy it from the leader') }}"></div>
         <div class="col-12 col-md-2"><label class="form-label">{{ _('Every (seconds)') }}</label><input class="form-control" id="interval" type="number" min="1" max="3600" value="30"></div>
       </div>
@@ -66,9 +72,14 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#env-note").classList.toggle("d-none", c.source !== "environment");
     ["#save", "#new-token", "#leader-url", "#follower-token", "#interval"].forEach((s) => { $(s).disabled = c.source === "environment"; });
     $("#leader-token").value = c.role === "leader" ? c.token : "";
-    $("#host-warning").classList.toggle("d-none", c.reachable_from_network);
-    $("#addresses").innerHTML = (c.addresses.length ? c.addresses : ["http://<this-computer-ip>:" + c.port]).map((u) =>
-      `<div class="input-group input-group-sm"><input class="form-control font-monospace" readonly value="${esc(u)}"><button class="btn btn-outline-secondary copy-addr" data-v="${esc(u)}" type="button"><i class="bi bi-clipboard"></i></button></div>`).join("");
+    $("#host-warning").classList.toggle("d-none", c.reachable_from_network || c.has_public_address);
+    const addrs = (c.public_addresses && c.public_addresses.length) ? c.public_addresses : c.addresses.map((u) => ({url: u, label: "LAN", stable: true, note: ""}));
+    $("#addresses").innerHTML = addrs.map((a) =>
+      `<div><div class="input-group input-group-sm"><span class="input-group-text">${esc(a.label)}</span><input class="form-control font-monospace" readonly value="${esc(a.url)}"><button class="btn btn-outline-secondary copy-addr" data-v="${esc(a.url)}" type="button"><i class="bi bi-clipboard"></i></button></div>` +
+      (a.note ? `<div class="form-text ${a.stable ? "" : "text-warning"}"><i class="bi bi-${a.stable ? "check2" : "exclamation-triangle"} me-1"></i>${esc(a.note)}</div>` : "") + `</div>`).join("");
+    const fl = c.followers || [];
+    $("#no-followers").classList.toggle("d-none", fl.length > 0);
+    $("#followers tbody").innerHTML = fl.map((f) => `<tr><td>${esc(f.name)}</td><td class="font-monospace">${esc(f.ip)}</td><td>${esc(f.version || "-")}</td><td>${esc((f.last_seen || "").replace("T", " ").slice(0, 19))}</td><td>${f.up_to_date ? '<span class="status healthy">' + T("up to date") + '</span>' : '<span class="status degraded">' + T("behind") + '</span>'}</td></tr>`).join("");
     document.querySelectorAll(".copy-addr").forEach((b) => b.onclick = () => { navigator.clipboard.writeText(b.dataset.v); toast(T("Copied")); });
     if (c.role === "follower") { $("#leader-url").value = c.leader_url; $("#follower-token").value = c.token; $("#interval").value = c.interval_seconds; }
     $("#problems").textContent = (c.problems || []).join(" ");
@@ -104,6 +115,6 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   $("#sync-now").onclick = async () => { try { await api("POST", "/v1/sync/now"); await load(); toast(T("Saved")); } catch (e) { toast(e.message, true); } };
   load();
-  poll = setInterval(() => { if (cfg && cfg.role === "follower") load(); }, 10000);
+  poll = setInterval(() => { if (cfg && cfg.role !== "off") load(); }, 10000);
 });
 </script>{% endblock %}

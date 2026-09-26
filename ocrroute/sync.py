@@ -242,7 +242,7 @@ class Follower(object):
         """
         with self.lock:
             self.state['last_attempt_at'] = datetime.now(timezone.utc).isoformat()
-            headers = {TOKEN_HEADER: self.settings.sync_token}
+            headers = {TOKEN_HEADER: self.settings.sync_token, NODE_HEADER: json.dumps(nodeIdentity(self.state['digest']))}
             if self.state['digest']:
                 headers['If-None-Match'] = '"{}"'.format(self.state['digest'])
             url = self.settings.sync_leader_url.rstrip('/') + '/v1/sync/snapshot'
@@ -472,3 +472,100 @@ class SyncManager(object):
 
 
 __all__ += ['SyncManager', 'configSource', 'loadConfig', 'testLeader']
+
+
+# --------------------------------------------------------------------------------------------------------------- #
+# many servers behind tunnels: who follows this leader, and which of the leader's addresses to hand out          #
+# --------------------------------------------------------------------------------------------------------------- #
+NODE_HEADER = 'X-OcrRoute-Sync-Node'      # JSON: {name, version, digest} sent by followers with every poll
+UNSTABLE_HOSTS = ('trycloudflare.com', 'ngrok-free.app', 'ngrok-free.dev', 'ngrok.io')  # new random URL per restart
+
+
+def nodeIdentity(digest=None):
+    """
+    :return: dict  what a follower tells the leader about itself
+    """
+    import socket
+
+    from ocrroute.runtime.endpoints import _serverId
+    from ocrroute.version import __version__
+
+    # id: this server's stable identifier (also on its Endpoints page). Two followers on one host, or behind one
+    # NAT address, would otherwise be listed as a single follower on the leader.
+    return {'id': _serverId(), 'name': socket.gethostname(), 'version': __version__, 'digest': digest or ''}
+
+
+def classifyAddress(url):
+    """
+    :param url: str
+    :return: dict  {url, stable, note}  stable=False for tunnel URLs that change on every restart
+    """
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or '').lower()
+    if any(host == h or host.endswith('.' + h) for h in UNSTABLE_HOSTS):
+        return {'url': url, 'stable': False,
+                'note': 'temporary: this URL changes every time the tunnel restarts; use a named tunnel or a static domain for the leader'}
+    if host.endswith('.ts.net'):
+        return {'url': url, 'stable': True, 'note': 'Tailscale: private to your machines, stable name, HTTPS'}
+    if url.startswith('https://'):
+        return {'url': url, 'stable': True, 'note': 'HTTPS'}
+    return {'url': url, 'stable': True, 'note': 'local network only (no HTTPS): fine on a LAN, never over the internet'}
+
+
+def publicAddresses(settings, db):
+    """
+    Addresses followers can use to reach this server, best first: running tunnels, the manual public URL, then LAN.
+
+    :return: list[dict]  {url, label, kind, stable, note}
+    """
+    out = []
+    try:
+        from ocrroute.api.routers.endpoints import readSettings
+        from ocrroute.runtime.endpoints import getEndpointManager, localAddresses
+
+        manual = readSettings(db).get('public_base_url', '')
+        for t in getEndpointManager(settings).snapshot(manual).get('tunnels', []):
+            if t.get('running') and t.get('url'):
+                out.append(dict(classifyAddress(str(t['url']).rstrip('/')), label=t.get('title') or t.get('name'), kind='tunnel'))
+        if manual:
+            out.append(dict(classifyAddress(manual.rstrip('/')), label='Public URL', kind='public'))
+        for ip in localAddresses():
+            out.append(dict(classifyAddress('http://{}:{}'.format(ip, settings.port)), label='LAN', kind='lan'))
+    except Exception as exc:  # noqa: BLE001 - the page must render even if a tunnel probe fails
+        log.warning('public addresses unavailable', error=str(exc))
+    return out
+
+
+def _recordFollower(manager, ip, header, currentDigest):
+    try:
+        info = json.loads(header) if header else {}
+    except ValueError:
+        info = {}
+    name = str(info.get('name') or ip)
+    key = str(info.get('id') or '{}@{}'.format(name, ip))
+    now = datetime.now(timezone.utc).isoformat()
+    entry = manager.followers.get(key) or {'first_seen': now}
+    entry.update(id=key, name=name, ip=ip, version=str(info.get('version') or ''), last_seen=now,
+                 digest=str(info.get('digest') or ''), up_to_date=bool(info.get('digest')) and info.get('digest') == currentDigest)
+    manager.followers[key] = entry
+
+
+SyncManager.followers = {}
+
+
+def recordFollower(manager, ip, header, currentDigest):
+    """
+    Remember a follower that just polled the leader (kept in memory: an overview, not an audit log).
+
+    :param manager: SyncManager
+    :param ip: str  remote address of the poll
+    :param header: str  the follower's ``X-OcrRoute-Sync-Node`` JSON
+    :param currentDigest: str  the leader's current snapshot digest
+    """
+    if manager.followers is SyncManager.followers:  # per-instance dict
+        manager.followers = {}
+    _recordFollower(manager, ip, header, currentDigest)
+
+
+__all__ += ['NODE_HEADER', 'classifyAddress', 'nodeIdentity', 'publicAddresses', 'recordFollower']

@@ -409,10 +409,12 @@ def _serverId():
 
         from ocrroute.config import getSettings
 
+        settings = getSettings()
+        path = getattr(settings, 'secretFile', None) or getattr(settings, 'secret_file', None)
         try:
-            raw = getSettings().secret_file.read_bytes()
-        except Exception:  # noqa: BLE001
-            raw = socket.gethostname().encode()
+            raw = path.read_bytes()
+        except Exception:  # noqa: BLE001 - no secret file yet: fall back to the home path, unique per installation
+            raw = '{}:{}'.format(socket.gethostname(), settings.home).encode()
         _serverIdValue = hashlib.sha1(raw).hexdigest()[:7]
     return _serverIdValue
 
