@@ -146,7 +146,9 @@ def buildContext(settings=None, sync=True):
         with sessionScope() as s:
             syncEngines(s, registry)
             if settings.auto_seed_providers:
-                if settings.sync_role != 'follower':  # followers get providers from the leader
+                from ocrroute.sync import loadConfig
+
+                if loadConfig(settings, s).sync_role != 'follower':  # followers get providers from the leader
                     seedProviders(s, registry)
     secrets = SecretStore(loadOrCreateKey(settings.secretFile, settings.secret_key))
     breaker = CircuitBreaker(settings.breaker_threshold, settings.breaker_cooldown_seconds)

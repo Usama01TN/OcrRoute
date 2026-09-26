@@ -56,6 +56,7 @@ NAV_GROUPS = [
     ]),
     ('system', 'System', [
         ('tools', 'Tools', 'Reserved for extensions', '/panel/tools', 'tools'),
+        ('cluster', 'Cluster sync', 'Share configuration between servers', '/panel/cluster', 'diagram-3'),
         ('settings', 'Settings', 'Runtime configuration', '/panel/settings', 'sliders'),
         ('doctor', 'Doctor', 'Diagnostics and health', '/panel/doctor', 'heart-pulse'),
     ]),
@@ -521,6 +522,12 @@ def addUser(
     if len(password) >= 8:
         auth.createUser(username.strip(), password, role if role in ('admin', 'operator', 'viewer') else 'viewer')
     return RedirectResponse('/panel/settings', status_code=303)
+
+
+@router.get('/cluster', response_class=HTMLResponse)
+def clusterPage(request: Request) -> Any:
+    _require(request)
+    return render(request, 'cluster.html', 'cluster')
 
 
 @router.get('/doctor', response_class=HTMLResponse)

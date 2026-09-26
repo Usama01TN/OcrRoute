@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="cluster" class="d-grid gap-3">
+  <div id="env-note" class="alert alert-info d-none mb-0"><i class="bi bi-info-circle me-2"></i>{{ _('Sync is configured in the .env file of this server, so this page is read-only. Edit OCRROUTE_SYNC_* there and restart.') }}</div>
+
+  <div class="card"><div class="card-header"><i class="bi bi-diagram-3"></i>{{ _('Role of this server') }}</div>
+    <div class="card-body">
+      <p class="small text-muted mb-3">{{ _('Change configuration on one server, the leader: every follower copies its providers, credentials, routes, API keys and users. OCR history, usage and cache stay separate on each server.') }}</p>
+      <div class="row g-2" id="roles">
+        {% for value, icon, title, text in [('off', 'slash-circle', _('Off'), _('This server works on its own.')), ('leader', 'broadcast', _('Leader'), _('Other servers copy this server\'s configuration.')), ('follower', 'arrow-down-circle', _('Follower'), _('This server copies the configuration of a leader.'))] %}
+        <div class="col-12 col-md-4"><label class="card h-100 p-3 role-card" style="cursor:pointer">
+          <div class="d-flex align-items-center gap-2 mb-1"><input class="form-check-input m-0" type="radio" name="role" value="{{ value }}"><i class="bi bi-{{ icon }}"></i><strong>{{ title }}</strong></div>
+          <span class="small text-muted">{{ text }}</span></label></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card d-none" id="leader-card"><div class="card-header"><i class="bi bi-broadcast"></i>{{ _('Leader settings') }}</div>
+    <div class="card-body d-grid gap-3">
+      <div id="host-warning" class="alert alert-warning d-none mb-0"><i class="bi bi-exclamation-triangle me-2"></i>{{ _('This server only listens on 127.0.0.1, so other computers cannot reach it. Set OCRROUTE_HOST=0.0.0.0 in the .env file, restart, and allow the port in the firewall.') }}</div>
+      <div><label class="form-label">{{ _('Sync token') }}</label>
+        <div class="input-group"><input class="form-control font-monospace" id="leader-token" readonly placeholder="{{ _('generated when you save') }}">
+          <button class="btn btn-outline-secondary" id="copy-token" type="button"><i class="bi bi-clipboard me-1"></i>{{ _('Copy') }}</button>
+          <button class="btn btn-outline-secondary" id="new-token" type="button"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Generate new') }}</button></div>
+        <div class="form-text">{{ _('Paste the same token on every follower. Keep it private: it gives read access to this configuration. A new token disconnects followers until they get it.') }}</div></div>
+      <div><label class="form-label">{{ _('Leader address for followers') }}</label><div id="addresses" class="d-grid gap-1"></div></div>
+    </div>
+  </div>
+
+  <div class="card d-none" id="follower-card"><div class="card-header"><i class="bi bi-arrow-down-circle"></i>{{ _('Follower settings') }}</div>
+    <div class="card-body d-grid gap-3">
+      <div class="row g-3">
+        <div class="col-12 col-md-6"><label class="form-label">{{ _('Leader address') }}</label><input class="form-control" id="leader-url" placeholder="http://192.168.1.10:20256"></div>
+        <div class="col-12 col-md-4"><label class="form-label">{{ _('Sync token') }}</label><input class="form-control font-monospace" id="follower-token" placeholder="{{ _('copy it from the leader') }}"></div>
+        <div class="col-12 col-md-2"><label class="form-label">{{ _('Every (seconds)') }}</label><input class="form-control" id="interval" type="number" min="1" max="3600" value="30"></div>
+      </div>
+      <div class="d-flex gap-2 align-items-center flex-wrap"><button class="btn btn-outline-secondary" id="test" type="button"><i class="bi bi-plug me-1"></i>{{ _('Test connection') }}</button><span id="test-result" class="small"></span></div>
+      <div class="alert alert-warning small mb-0"><i class="bi bi-exclamation-triangle me-2"></i>{{ _('After the first sync, this server uses the leader\'s API keys and panel users: sign in with an account from the leader.') }}</div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2"><button class="btn btn-grad" id="save" type="button"><i class="bi bi-check2 me-1"></i>{{ _('Save and apply') }}</button><span id="problems" class="small text-danger align-self-center"></span></div>
+
+  <div class="card d-none" id="status-card"><div class="card-header"><i class="bi bi-activity"></i>{{ _('Sync status') }}<button class="btn btn-sm btn-outline-secondary ms-auto" id="sync-now" type="button"><i class="bi bi-arrow-repeat me-1"></i>{{ _('Sync now') }}</button></div>
+    <div class="card-body"><table class="table table-sm small mb-0" id="status"></table></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const {api, toast} = OcrRoute, $ = (s) => document.querySelector(s), T = (k) => (window.I18N && window.I18N[k]) || k;
+  let cfg = null, poll = null;
+  const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  function role() { return (document.querySelector("input[name=role]:checked") || {}).value || "off"; }
+  function show() {
+    const r = role();
+    $("#leader-card").classList.toggle("d-none", r !== "leader");
+    $("#follower-card").classList.toggle("d-none", r !== "follower");
+    $("#status-card").classList.toggle("d-none", !(cfg && cfg.role === "follower"));
+    document.querySelectorAll(".role-card").forEach((c) => c.classList.toggle("border-primary", c.querySelector("input").value === r));
+  }
+  function fill(c) {
+    cfg = c;
+    document.querySelectorAll("input[name=role]").forEach((i) => { i.checked = i.value === c.role; i.disabled = c.source === "environment"; });
+    $("#env-note").classList.toggle("d-none", c.source !== "environment");
+    ["#save", "#new-token", "#leader-url", "#follower-token", "#interval"].forEach((s) => { $(s).disabled = c.source === "environment"; });
+    $("#leader-token").value = c.role === "leader" ? c.token : "";
+    $("#host-warning").classList.toggle("d-none", c.reachable_from_network);
+    $("#addresses").innerHTML = (c.addresses.length ? c.addresses : ["http://<this-computer-ip>:" + c.port]).map((u) =>
+      `<div class="input-group input-group-sm"><input class="form-control font-monospace" readonly value="${esc(u)}"><button class="btn btn-outline-secondary copy-addr" data-v="${esc(u)}" type="button"><i class="bi bi-clipboard"></i></button></div>`).join("");
+    document.querySelectorAll(".copy-addr").forEach((b) => b.onclick = () => { navigator.clipboard.writeText(b.dataset.v); toast(T("Copied")); });
+    if (c.role === "follower") { $("#leader-url").value = c.leader_url; $("#follower-token").value = c.token; $("#interval").value = c.interval_seconds; }
+    $("#problems").textContent = (c.problems || []).join(" ");
+    const st = c.state;
+    if (st) {
+      const row = (k, v) => `<tr><td class="text-muted">${esc(k)}</td><td>${v}</td></tr>`;
+      const changes = st.last_result ? Object.entries(st.last_result.upserted || {}).map(([k, n]) => `${esc(k)}: ${n}`).join(" · ") : "-";
+      $("#status").innerHTML = row(T("Leader"), esc(c.leader_url)) +
+        row(T("Last successful sync"), esc(st.last_success_at || "-")) + row(T("Last change applied"), esc(st.last_change_at || "-")) +
+        row(T("Error"), st.last_error ? `<span class="text-danger">${esc(st.last_error)}</span>` : `<span class="status healthy">OK</span>`) +
+        row(T("Copied from the leader"), changes) +
+        (st.last_result && st.last_result.skipped && st.last_result.skipped.length ? row(T("Skipped"), esc(st.last_result.skipped.join("; "))) : "");
+    }
+    show();
+  }
+  async function load() { try { fill(await api("GET", "/v1/sync/config")); } catch (e) { toast(e.message, true); } }
+  document.querySelectorAll("input[name=role]").forEach((i) => i.addEventListener("change", show));
+  $("#copy-token").onclick = () => { if ($("#leader-token").value) { navigator.clipboard.writeText($("#leader-token").value); toast(T("Copied")); } };
+  $("#new-token").onclick = async () => { const r = await api("POST", "/v1/sync/token"); $("#leader-token").value = r.token; toast(T("Save to apply the new token")); };
+  $("#test").onclick = async () => {
+    const out = $("#test-result"); out.className = "small text-muted"; out.textContent = T("Testing…");
+    try {
+      const r = await api("POST", "/v1/sync/test", {leader_url: $("#leader-url").value, token: $("#follower-token").value});
+      out.className = "small " + (r.ok ? "text-success" : "text-danger");
+      out.textContent = r.message + (r.ok ? " (" + Object.entries(r.counts).map(([k, n]) => `${k}: ${n}`).join(", ") + ")" : "");
+    } catch (e) { out.className = "small text-danger"; out.textContent = e.message; }
+  };
+  $("#save").onclick = async () => {
+    const r = role(), body = {role: r, interval_seconds: parseInt($("#interval").value || "30", 10)};
+    if (r === "leader") body.token = $("#leader-token").value;
+    if (r === "follower") { body.leader_url = $("#leader-url").value; body.token = $("#follower-token").value; }
+    try { fill(await api("PUT", "/v1/sync/config", body)); toast(T("Saved")); } catch (e) { $("#problems").textContent = e.message; toast(e.message, true); }
+  };
+  $("#sync-now").onclick = async () => { try { await api("POST", "/v1/sync/now"); await load(); toast(T("Saved")); } catch (e) { toast(e.message, true); } };
+  load();
+  poll = setInterval(() => { if (cfg && cfg.role === "follower") load(); }, 10000);
+});
+</script>{% endblock %}

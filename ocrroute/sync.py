@@ -299,9 +299,18 @@ def validate(settings):
         problems.append('OCRROUTE_SYNC_ROLE must be off, leader or follower (got {!r})'.format(role))
     if role in ('leader', 'follower') and len(settings.sync_token or '') < 24:
         problems.append('OCRROUTE_SYNC_TOKEN must be at least 24 characters (generate one: ocrroute sync token)')
+    if role == 'follower' and interval_ok(settings) is False:
+        problems.append('the sync interval must be between 1 and 3600 seconds')
     if role == 'follower' and not (settings.sync_leader_url or '').startswith(('http://', 'https://')):
         problems.append('OCRROUTE_SYNC_LEADER_URL must be the leader base URL, e.g. https://ocr-1.example.com')
     return problems
+
+
+def interval_ok(settings):
+    try:
+        return 1 <= int(settings.sync_interval_seconds) <= 3600
+    except (TypeError, ValueError):
+        return False
 
 
 def newToken():
@@ -319,3 +328,147 @@ def nowMs():
 
 __all__ = ['Follower', 'MANAGED_PREFIXES', 'TOKEN_HEADER', 'applySnapshot', 'buildSnapshot', 'newToken',
            'tokenMatches', 'validate']
+
+
+# --------------------------------------------------------------------------------------------------------------- #
+# configuration from the dashboard (stored locally under "sync.config"; .env / environment variables win)        #
+# --------------------------------------------------------------------------------------------------------------- #
+CONFIG_KEY = 'sync.config'
+ENV_KEYS = ('OCRROUTE_SYNC_ROLE', 'OCRROUTE_SYNC_TOKEN', 'OCRROUTE_SYNC_LEADER_URL', 'OCRROUTE_SYNC_INTERVAL_SECONDS')
+
+
+def configSource(settings):
+    """
+    :return: str  "environment" when any OCRROUTE_SYNC_* variable (or .env entry) sets sync, else "dashboard"
+    """
+    import os
+
+    if any(os.environ.get(k) for k in ENV_KEYS):
+        return 'environment'
+    if settings.sync_role != 'off' or settings.sync_token or settings.sync_leader_url:  # values read from .env
+        return 'environment'
+    return 'dashboard'
+
+
+def loadConfig(settings, db):
+    """
+    :return: SimpleNamespace  sync_role, sync_token, sync_leader_url, sync_interval_seconds, source
+    """
+    from types import SimpleNamespace
+
+    source = configSource(settings)
+    if source == 'environment':
+        return SimpleNamespace(sync_role=settings.sync_role, sync_token=settings.sync_token,
+                               sync_leader_url=settings.sync_leader_url,
+                               sync_interval_seconds=settings.sync_interval_seconds, source=source)
+    row = db.get(Setting, CONFIG_KEY)
+    data = dict(row.value_json) if row is not None and isinstance(row.value_json, dict) else {}
+    return SimpleNamespace(sync_role=data.get('role', 'off'), sync_token=data.get('token', ''),
+                           sync_leader_url=data.get('leader_url', ''),
+                           sync_interval_seconds=int(data.get('interval_seconds', 30) or 30), source=source)
+
+
+def saveConfig(db, role, token, leaderUrl, interval):
+    row = db.get(Setting, CONFIG_KEY)
+    value = {'role': role, 'token': token, 'leader_url': leaderUrl.rstrip('/'), 'interval_seconds': int(interval)}
+    if row is None:
+        db.add(Setting(key=CONFIG_KEY, value_json=value))
+    else:
+        row.value_json = value
+
+
+def testLeader(url, token, http=None):
+    """
+    Ask a leader for a snapshot without applying it.
+
+    :return: dict  {ok, message, counts}
+    """
+    if http is None:
+        import requests as http
+    try:
+        r = http.get(url.rstrip('/') + '/v1/sync/snapshot', headers={TOKEN_HEADER: token}, timeout=15)
+    except Exception as exc:  # noqa: BLE001
+        return {'ok': False, 'message': 'Cannot reach {}: {}. Check the address, that the leader listens on 0.0.0.0 '
+                                        '(not 127.0.0.1) and the firewall.'.format(url, type(exc).__name__), 'counts': {}}
+    if r.status_code == 401:
+        return {'ok': False, 'message': 'The leader rejected the token: copy the exact token from the leader.', 'counts': {}}
+    if r.status_code == 404:
+        return {'ok': False, 'message': '{} answered, but it is not a sync leader: set its role to Leader.'.format(url),
+                'counts': {}}
+    if r.status_code != 200:
+        return {'ok': False, 'message': 'Unexpected answer from the leader: HTTP {}'.format(r.status_code), 'counts': {}}
+    data = r.json().get('data', {})
+    counts = {k: len(data.get(k) or []) for k in ('providers', 'credentials', 'routes', 'api_keys', 'users')}
+    return {'ok': True, 'message': 'Connected: the leader shares its configuration.', 'counts': counts}
+
+
+class SyncManager(object):
+    """
+    SyncManager class: the running sync role of this server, reconfigurable live from the dashboard.
+    """
+
+    def __init__(self, settings, sessionFactory, secrets):
+        self.settings = settings
+        self.sessionFactory = sessionFactory
+        self.secrets = secrets
+        self.config = None
+        self.follower = None
+        self.lock = threading.Lock()
+
+    @property
+    def role(self):
+        return self.config.sync_role if self.config is not None else 'off'
+
+    def reload(self):
+        """Read the configuration (environment or dashboard) and start / stop the follower to match."""
+        with self.sessionFactory() as db:
+            config = loadConfig(self.settings, db)
+        self._apply(config)
+        return config
+
+    def _apply(self, config):
+        with self.lock:
+            if self.follower is not None:
+                self.follower.stop()
+                self.follower = None
+            self.config = config
+            problems = validate(config)
+            if problems:
+                if config.sync_role != 'off':
+                    log.error('cluster sync disabled: invalid configuration', problems=problems)
+                return
+            if config.sync_role == 'follower':
+                self.follower = Follower(config, self.sessionFactory, self.secrets)
+                self.follower.start()
+                log.info('cluster sync: following', leader=config.sync_leader_url, source=config.source)
+            elif config.sync_role == 'leader':
+                log.info('cluster sync: serving snapshots to followers', source=config.source)
+
+    def configure(self, role, token, leaderUrl, interval):
+        """
+        Save the dashboard configuration and apply it immediately.
+
+        :return: list[str]  problems (nothing saved when not empty)
+        """
+        from types import SimpleNamespace
+
+        if configSource(self.settings) == 'environment':
+            return ['Sync is configured by environment variables (.env) on this server; edit them there and restart.']
+        candidate = SimpleNamespace(sync_role=role, sync_token=token, sync_leader_url=leaderUrl,
+                                    sync_interval_seconds=int(interval), source='dashboard')
+        problems = validate(candidate)
+        if problems:
+            return problems
+        with self.sessionFactory() as db:
+            saveConfig(db, role, token, leaderUrl, interval)
+        self.reload()
+        return []
+
+    def stop(self):
+        with self.lock:
+            if self.follower is not None:
+                self.follower.stop()
+                self.follower = None
+
+
+__all__ += ['SyncManager', 'configSource', 'loadConfig', 'testLeader']
