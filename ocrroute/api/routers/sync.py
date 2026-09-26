@@ -28,6 +28,8 @@ def snapshot(request: Request, response: Response, db: Session = Depends(getDb))
     if not sync.tokenMatches(config.sync_token, request.headers.get(sync.TOKEN_HEADER)):
         raise Unauthorized('invalid sync token')
     snap = sync.buildSnapshot(db, request.app.state.ctx.secrets, config.sync_token)
+    sync.recordFollower(_manager(request), request.client.host if request.client else '?',
+                        request.headers.get(sync.NODE_HEADER, ''), snap['digest'])
     etag = '"{}"'.format(snap['digest'])
     if request.headers.get('If-None-Match') == etag:
         return Response(status_code=304, headers={'ETag': etag})
@@ -35,14 +37,20 @@ def snapshot(request: Request, response: Response, db: Session = Depends(getDb))
     return snap
 
 
-def _config(request):
+def _config(request, db=None):
     from ocrroute.runtime.endpoints import localAddresses
 
     m = _manager(request)
     c = m.config
     settings = request.app.state.ctx.settings
     port = settings.port
+    addresses = []
+    if db is not None:
+        addresses = sync.publicAddresses(settings, db)
     return {
+        'public_addresses': addresses,
+        'has_public_address': any(a['kind'] in ('tunnel', 'public') for a in addresses),
+        'followers': sorted(getattr(m, 'followers', {}).values(), key=lambda f: f['name']) if c.sync_role == 'leader' else [],
         'role': c.sync_role, 'source': c.source, 'leader_url': c.sync_leader_url,
         'interval_seconds': c.sync_interval_seconds, 'token': c.sync_token, 'token_set': bool(c.sync_token),
         'problems': sync.validate(c) if c.sync_role != 'off' else [],
@@ -54,13 +62,13 @@ def _config(request):
 
 
 @router.get('/sync/status')
-def status(request: Request, key=Depends(admin)):
-    return _config(request)
+def status(request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    return _config(request, db)
 
 
 @router.get('/sync/config')
-def getConfig(request: Request, key=Depends(admin)):
-    return _config(request)
+def getConfig(request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    return _config(request, db)
 
 
 class SyncConfigIn(BaseModel):
@@ -71,7 +79,7 @@ class SyncConfigIn(BaseModel):
 
 
 @router.put('/sync/config')
-def putConfig(body: SyncConfigIn, request: Request, key=Depends(admin)):
+def putConfig(body: SyncConfigIn, request: Request, db: Session = Depends(getDb), key=Depends(admin)):
     """Save this server's sync role and apply it immediately (no restart)."""
     token = body.token.strip()
     if body.role == 'leader' and not token:
@@ -79,7 +87,7 @@ def putConfig(body: SyncConfigIn, request: Request, key=Depends(admin)):
     problems = _manager(request).configure(body.role, token, body.leader_url.strip(), body.interval_seconds)
     if problems:
         raise BadInput(' '.join(problems))
-    return _config(request)
+    return _config(request, db)
 
 
 @router.post('/sync/token')
