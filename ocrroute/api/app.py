@@ -25,7 +25,6 @@ from ocrroute.runtime.context import buildContext, getContext
 from ocrroute.runtime.jobs import JobRunner
 from ocrroute.runtime.maintenance import Scheduler
 from ocrroute.sync import MANAGED_PREFIXES
-from ocrroute.sync import validate as syncValidate
 from ocrroute.version import __version__
 
 log = getLogger(__name__)
@@ -78,19 +77,11 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
             ctx.executor.events.append(_runMetric)
         _scheduler = Scheduler(settings)
         _scheduler.start()
-        app.state.follower = None
-        problems = syncValidate(settings)
-        if problems:
-            log.error('cluster sync disabled: invalid configuration', problems=problems)
-        elif settings.sync_role == 'follower':
-            from ocrroute.db.session import sessionScope
-            from ocrroute.sync import Follower
+        from ocrroute.db.session import sessionScope
+        from ocrroute.sync import SyncManager
 
-            app.state.follower = Follower(settings, sessionScope, ctx.secrets)
-            app.state.follower.start()
-            log.info('cluster sync: following', leader=settings.sync_leader_url)
-        elif settings.sync_role == 'leader':
-            log.info('cluster sync: serving snapshots to followers')
+        app.state.sync = SyncManager(settings, sessionScope, ctx.secrets)  # .env or the dashboard's Cluster sync page
+        app.state.sync.reload()
         log.info(
             'ocrroute started',
             version=__version__,
@@ -99,8 +90,8 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
             engines=len(ctx.registry.available()),
         )
         yield
-        if getattr(app.state, 'follower', None) is not None:
-            app.state.follower.stop()
+        if getattr(app.state, 'sync', None) is not None:
+            app.state.sync.stop()
         if _scheduler:
             _scheduler.stop()
 
@@ -118,13 +109,14 @@ def createApp(settings=None, include_panel=True, include_api=True, with_panel=No
     @app.middleware('http')
     async def followerReadOnly(request, call_next):
         """A follower mirrors its leader: configuration edits here would be overwritten at the next sync."""
-        if (settings.sync_role == 'follower' and request.method not in ('GET', 'HEAD', 'OPTIONS')
+        manager = getattr(request.app.state, 'sync', None)
+        if (manager is not None and manager.role == 'follower' and request.method not in ('GET', 'HEAD', 'OPTIONS')
                 and request.url.path.startswith(MANAGED_PREFIXES)):
             from fastapi.responses import JSONResponse
 
             return JSONResponse({'status': 'failed', 'error_code': 'conflict', 'error_message':
                                  'This server follows {} (cluster sync): change configuration on the leader.'.format(
-                                     settings.sync_leader_url)}, status_code=409)
+                                     manager.config.sync_leader_url)}, status_code=409)
         return await call_next(request)
 
     if settings.cors_origins:
