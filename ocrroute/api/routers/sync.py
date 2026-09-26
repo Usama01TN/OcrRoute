@@ -25,11 +25,26 @@ def snapshot(request: Request, response: Response, db: Session = Depends(getDb))
     config = _manager(request).config
     if config is None or config.sync_role != 'leader':
         raise NotFound('this server is not a sync leader')
-    if not sync.tokenMatches(config.sync_token, request.headers.get(sync.TOKEN_HEADER)):
-        raise Unauthorized('invalid sync token')
-    snap = sync.buildSnapshot(db, request.app.state.ctx.secrets, config.sync_token)
-    sync.recordFollower(_manager(request), request.client.host if request.client else '?',
-                        request.headers.get(sync.NODE_HEADER, ''), snap['digest'])
+    import json as _json
+
+    presented = request.headers.get(sync.TOKEN_HEADER) or ''
+    try:
+        info = _json.loads(request.headers.get(sync.NODE_HEADER) or '{}')
+    except ValueError:
+        info = {}
+    try:
+        key = sync.authenticatePoll(db, config.sync_token, presented, info)
+    except sync.SyncRefused as exc:
+        db.commit()
+        if exc.status == 401:
+            raise Unauthorized(str(exc))
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse({'status': 'failed', 'error_code': 'forbidden', 'error_message': str(exc)}, status_code=403)
+    # each server's secrets travel encrypted with the token IT presented (its own card token, or the shared one)
+    snap = sync.buildSnapshot(db, request.app.state.ctx.secrets, presented)
+    sync.recordPoll(db, key, info, request.client.host if request.client else '?', snap['digest'])
+    db.commit()
     etag = '"{}"'.format(snap['digest'])
     if request.headers.get('If-None-Match') == etag:
         return Response(status_code=304, headers={'ETag': etag})
@@ -50,7 +65,7 @@ def _config(request, db=None):
     return {
         'public_addresses': addresses,
         'has_public_address': any(a['kind'] in ('tunnel', 'public') for a in addresses),
-        'followers': sorted(getattr(m, 'followers', {}).values(), key=lambda f: f['name']) if c.sync_role == 'leader' else [],
+        'followers': sync.listNodes(db) if (db is not None and c.sync_role == 'leader') else [],
         'role': c.sync_role, 'source': c.source, 'leader_url': c.sync_leader_url,
         'interval_seconds': c.sync_interval_seconds, 'token': c.sync_token, 'token_set': bool(c.sync_token),
         'problems': sync.validate(c) if c.sync_role != 'off' else [],
@@ -113,3 +128,64 @@ def syncNow(request: Request, key=Depends(admin)):
     if follower is None:
         raise BadInput('this server is not a sync follower')
     return follower.syncOnce()
+
+
+# --------------------------------------------------------------------------------------------------------------- #
+# server cards (leader): create / read / update / delete                                                          #
+# --------------------------------------------------------------------------------------------------------------- #
+class NodeIn(BaseModel):
+    label: str
+    notes: str = ''
+
+
+class NodePatch(BaseModel):
+    label: str | None = None
+    notes: str | None = None
+    paused: bool | None = None
+    regenerate_token: bool = False
+
+
+def _leaderOnly(request):
+    c = _manager(request).config
+    if c is None or c.sync_role != 'leader':
+        raise BadInput('server cards are managed on the leader: set this server\'s role to Leader first')
+
+
+@router.get('/sync/nodes')
+def listNodes(request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    _leaderOnly(request)
+    return {'items': sync.listNodes(db)}
+
+
+@router.post('/sync/nodes', status_code=201)
+def createNode(body: NodeIn, request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    """A new server card with its own token (returned once)."""
+    _leaderOnly(request)
+    node, token = sync.createNode(db, body.label, body.notes)
+    db.commit()
+    return {'node': [n for n in sync.listNodes(db) if n['key'] == node['key']][0], 'token': token}
+
+
+@router.patch('/sync/nodes/{nodeKey}')
+def patchNode(nodeKey: str, body: NodePatch, request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    _leaderOnly(request)
+    try:
+        node, token = sync.updateNode(db, nodeKey, body.label, body.notes, body.paused, body.regenerate_token)
+    except KeyError:
+        raise NotFound('server card not found')
+    db.commit()
+    out = {'node': [n for n in sync.listNodes(db) if n['key'] == nodeKey][0]}
+    if token:
+        out['token'] = token
+    return out
+
+
+@router.delete('/sync/nodes/{nodeKey}', status_code=204)
+def deleteNode(nodeKey: str, request: Request, db: Session = Depends(getDb), key=Depends(admin)):
+    _leaderOnly(request)
+    try:
+        sync.deleteNode(db, nodeKey)
+    except KeyError:
+        raise NotFound('server card not found')
+    db.commit()
+    return Response(status_code=204)
