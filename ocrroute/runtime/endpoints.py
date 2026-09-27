@@ -26,28 +26,37 @@ log = getLogger(__name__)
 _URL_RE = re.compile(r'https://[A-Za-z0-9.\-]+\.(?:trycloudflare\.com|ngrok(?:-free)?\.(?:app|dev|io)|ts\.net)[^\s"\']*')
 
 
-def localAddresses():
+_ADDR_CACHE = {'at': 0.0, 'value': None}
+_ADDR_TTL = 30.0
+
+
+def localAddresses(refresh=False):
     """
+    :param refresh: bool  ignore the 30-second cache
     :return: list[str]  IPv4 addresses of this machine, primary first, without duplicates or loopback
+
+    No hostname lookup: ``getaddrinfo(gethostname())`` goes through mDNS on macOS and can block for seconds (sometimes
+    tens of seconds). Sync asks for these addresses on every poll, so that lookup stalled clusters on Macs. The
+    default-route trick (no DNS) and the system's interface list find the same addresses quickly.
     """
+    import time as _time
+
+    now = _time.monotonic()
+    if not refresh and _ADDR_CACHE['value'] is not None and now - _ADDR_CACHE['at'] < _ADDR_TTL:
+        return list(_ADDR_CACHE['value'])
     found = []
-    try:  # primary (default-route) address
+    try:  # primary (default-route) address: a UDP "connect" sends nothing and needs no DNS
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(('10.255.255.255', 1))
         found.append(s.getsockname()[0])
         s.close()
     except Exception:  # noqa: BLE001
         pass
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            found.append(info[4][0])
-    except socket.gaierror:
-        pass
     system = platform.system()
     cmd = {'Linux': ['ip', '-4', '-o', 'addr'], 'Darwin': ['ifconfig'], 'Windows': ['ipconfig']}.get(system)
     if cmd and which(cmd[0]):
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=5).stdout
+            out = subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout
             found += re.findall(r'(?:inet |IPv4[^:]*:\s*)(\d+\.\d+\.\d+\.\d+)', out)
         except Exception:  # noqa: BLE001
             pass
@@ -57,6 +66,7 @@ def localAddresses():
             continue
         seen.add(ip)
         result.append(ip)
+    _ADDR_CACHE.update(at=now, value=list(result))
     return result
 
 
