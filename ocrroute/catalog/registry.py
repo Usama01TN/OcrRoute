@@ -683,7 +683,10 @@ class EngineRegistry(object):
         :return: str | unicode  '' when the module imports, otherwise the error text
         """
         try:
-            import_module(moduleName)
+            from ocrroute.stdio import filteredNativeStderr
+
+            with filteredNativeStderr():  # the re-import prints the same native start-up noise again
+                import_module(moduleName)
         except BaseException as exc:  # noqa: BLE001 - engines raise anything at import time
             return '{}: {}'.format(type(exc).__name__, exc)
         return ''
