@@ -202,7 +202,6 @@ jobs:
             echo ""
             echo "Download: ${{ steps.upload.outputs.artifact-url }}"
           } >> "$GITHUB_STEP_SUMMARY"
-
   version-check:
     name: New version?
     runs-on: ubuntu-latest
@@ -223,7 +222,6 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "new=${NEW}" >> "$GITHUB_OUTPUT"
           echo "code version ${VERSION}: tag ${TAG} $( [ "${NEW}" = true ] && echo 'does not exist yet' || echo 'already exists')"
-
   release:
     name: Publish release
     # Runs for a pushed version tag (git tag v0.7.1 && git push origin v0.7.1), or for "Run workflow" with
@@ -296,7 +294,6 @@ jobs:
           echo "### 🚀 Release ${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           echo "https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
           for f in release/*; do echo "- https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.tag }}/$(basename "$f")" >> "$GITHUB_STEP_SUMMARY"; done
-
   release-gate:
     name: Why no release?
     needs: [build, version-check]
