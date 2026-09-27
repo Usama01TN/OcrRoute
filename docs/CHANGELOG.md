@@ -23,6 +23,12 @@
 - **Fix: the Cluster sync page switched back to the saved role every 10 seconds** (e.g. "Leader") while you were editing:
   the periodic refresh now updates only the status and server cards, never the form, and pauses while there are unsaved
   edits. Followers explain refusals from the leader (paused, removed, token replaced).
+- **Fix (macOS): cluster sync stalled and servers would not stop.** Finding this machine's addresses used a hostname
+  lookup (`getaddrinfo(gethostname())`), which goes through mDNS on macOS and can block for many seconds; sync needs the
+  addresses on every poll (member), every snapshot (primary) and in the address watcher, so members never synced and
+  shutdown waited on blocked threads. The lookup is gone (the default-route trick and the interface list find the same
+  addresses without DNS) and the result is cached for 30 s. Reproduced on Linux by making hostname lookups as slow as on
+  macOS: the old code failed exactly like CI, the fixed code passes every cluster test.
 - **Fix: `Exception in thread ocrroute-sync-watch ... AttributeError: 'NoneType' object has no attribute 'is_set'`**
   after changing the cluster role: the old address watcher read the manager's stop event, which the reconfiguration had
   just cleared. Each watcher now owns its stop event (tested with five quick role changes).

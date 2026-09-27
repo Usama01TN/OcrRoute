@@ -263,3 +263,26 @@ def test_pasted_panel_links_become_the_base_url():
     assert sync.baseUrl('https://example.com/ocr/panel/cluster') == 'https://example.com/ocr'
     assert sync.normaliseLeaders(['http://10.0.0.5:20256/panel/'])[0]['url'] == 'http://10.0.0.5:20256'
     assert sync.isLoopback('http://127.0.0.1:20256') and not sync.isLoopback('http://192.168.1.10:20256')
+
+
+def test_local_addresses_never_wait_for_a_slow_hostname_lookup(monkeypatch):
+    """Regression (macOS): getaddrinfo(gethostname()) goes through mDNS and blocked every sync poll for seconds."""
+    import socket
+    import time
+
+    from ocrroute.runtime import endpoints
+
+    real = socket.getaddrinfo
+
+    def slow(host, *a, **k):
+        if host == socket.gethostname():
+            time.sleep(8)
+        return real(host, *a, **k)
+
+    monkeypatch.setattr(socket, 'getaddrinfo', slow)
+    t0 = time.time()
+    first = endpoints.localAddresses(refresh=True)
+    assert time.time() - t0 < 4, 'localAddresses waited for a hostname lookup'
+    t1 = time.time()
+    assert endpoints.localAddresses() == first and time.time() - t1 < 0.05  # cached
+    assert all(not ip.startswith('127.') for ip in first)
