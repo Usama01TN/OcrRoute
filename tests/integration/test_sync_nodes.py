@@ -75,3 +75,39 @@ def test_server_cards_crud_and_duplicate_usernames(tmp_path):
             p.terminate()
         for p in procs:
             p.wait(timeout=10)
+
+
+def test_bulk_add_followers_and_edit_address(tmp_path):
+    lp, ap = _port(), _port()
+    L, A = 'http://127.0.0.1:{}'.format(lp), 'http://127.0.0.1:{}'.format(ap)
+    lkey, akey = _adminKey(tmp_path / 'leader'), _adminKey(tmp_path / 'a')
+    procs = [_serve(tmp_path / 'leader', lp), _serve(tmp_path / 'a', ap)]
+    try:
+        _wait(L, procs[0])
+        _wait(A, procs[1])
+        LH = {'Authorization': 'Bearer ' + lkey}
+        requests.put(L + '/v1/sync/config', json={'role': 'leader'}, headers=LH).raise_for_status()
+        r = requests.post(L + '/v1/sync/nodes/bulk', headers=LH, json={'items': [
+            {'label': 'ocr-1'}, {'label': 'ocr-2', 'address': 'https://ocr-2.example.com/', 'notes': 'rack 2'},
+            {'label': '   '}, {'label': 'ocr-3'}]})
+        assert r.status_code == 201
+        items = r.json()['items']
+        assert [i['node']['label'] for i in items] == ['ocr-1', 'ocr-2', 'ocr-3']  # blank rows are ignored
+        assert len({i['token'] for i in items}) == 3
+        assert items[1]['node']['addresses'] == ['https://ocr-2.example.com'] and items[1]['node']['notes'] == 'rack 2'
+        assert requests.post(L + '/v1/sync/nodes/bulk', json={'items': [{'label': ''}]}, headers=LH).status_code == 400
+        # one of the bulk-created followers really syncs with its own token
+        requests.put(A + '/v1/sync/config', json={'role': 'follower', 'leader_url': L, 'token': items[0]['token'],
+                                                  'interval_seconds': 1}, headers={'Authorization': 'Bearer ' + akey}).raise_for_status()
+        _until(lambda: any(n['label'] == 'ocr-1' and n['status'] == 'up_to_date'
+                           for n in requests.get(L + '/v1/sync/nodes', headers=LH).json()['items']))
+        # edit the address of a card; an invalid address is refused
+        key = items[2]['node']['key']
+        ok = requests.patch(L + '/v1/sync/nodes/' + key, json={'address': 'https://ocr-3.example.com'}, headers=LH).json()
+        assert ok['node']['manual_address'] == 'https://ocr-3.example.com'
+        assert requests.patch(L + '/v1/sync/nodes/' + key, json={'address': 'not a url'}, headers=LH).status_code == 400
+    finally:
+        for p in procs:
+            p.terminate()
+        for p in procs:
+            p.wait(timeout=10)

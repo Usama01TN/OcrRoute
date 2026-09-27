@@ -1,59 +1,79 @@
-# Cluster sync
+# Cluster
 
-Run several OcrRoute servers with one configuration. One server is the **leader**: you change configuration there.
-Every other server is a **follower**: it mirrors the leader and stays read-only for configuration.
+Several OcrRoute servers can share one configuration, the way Proxmox or Docker Swarm clusters work: one server is the
+**primary**, the others **join** it with a **join code**.
 
-## What is synchronised
+## How it works
 
-Providers, credentials, routes (with their members), client API keys, panel users, runtime settings, and which engines
-are enabled. A client API key created on the leader works on every follower, so a load balancer can send any
-request to any server.
+1. On the server that will hold the configuration: **Cluster > Create a cluster**. It becomes the **primary**.
+2. On the primary: **Add servers** (one or many at once). Each server gets its own **join code**: one string with the
+   primary's addresses and that server's secret.
+3. On each other server: **Cluster > Join a cluster**, paste its code, **Join cluster**. Nothing else to type.
+4. From then on you edit providers, credentials, routes, API keys and users **on the primary only**; every member copies
+   them within seconds and is read-only for configuration. OCR history, usage, cache, logs and each server's own address
+   stay per server.
 
-Per server, never synchronised: OCR runs, usage and costs, the result cache, jobs, logs, provider health and circuit
-breakers, credential usage counters and quota state, "last used" / "last login" timestamps, and each server's own
-address, port and sync settings.
+Every server shows the member list with each member's status. On the primary each member card has **Edit** (name, notes)
+and **Remove**, plus **Show join code**, **New join code** and **Pause**. A member can **Leave cluster**; the primary
+can **Delete cluster**. Leaving or being removed keeps the configuration the server already has.
 
-## Set up from the dashboard (recommended)
+After joining, a member uses the primary's API keys and panel users: sign in with an account from the primary.
 
-On each server, open the web panel, go to **System > Cluster sync**, pick a role and click **Save and apply**. It takes
-effect immediately, without a restart.
+## Addresses
 
-1. **Leader** (e.g. `ocr-1`): choose **Leader** and save. A token is generated: click **Copy**. The page also lists the
-   addresses followers should use (e.g. `http://192.168.1.10:20256`).
-2. **Each follower**: choose **Follower**, paste the leader address and the token, click **Test connection** (it shows
-   how many providers, routes and keys the leader shares), then **Save and apply**. The status card shows the last sync,
-   any error and what was copied; **Sync now** forces a sync.
+The join code carries every address of the primary, best first: running tunnels (Endpoints page), its public URL, then
+LAN addresses. Members fail over between them, and the primary tells members when its address changes (for example a
+Cloudflare quick tunnel that restarted with a new name). A stable primary address (Tailscale `*.ts.net`, a Cloudflare
+named tunnel, an ngrok static domain) remains the most reliable. The primary does not need `OCRROUTE_HOST=0.0.0.0`
+behind a tunnel; without a tunnel, other computers need it (and the port open in the firewall).
 
-Two things the dashboard cannot change, because they apply when the server starts:
-- The leader must listen on the network: set `OCRROUTE_HOST=0.0.0.0` in its `.env`, restart, and allow port 20256 in
-  the firewall. The page warns when the server only listens on `127.0.0.1`.
-- After the first sync a follower uses the leader's API keys and panel users: sign in with an account from the leader.
+## Security
 
-## Many servers behind tunnels (ngrok, Cloudflare, Tailscale...)
+- A join code contains a secret: send it privately. **New join code** replaces it; **Remove** revokes it.
+- Before a member sends its secret to an address, the primary must prove it knows that secret (challenge / response),
+  so an address announced by someone else, or a typo, never leaks it.
+- Credentials travel encrypted with the member's own secret and are re-encrypted with each server's own master key.
+- Serve the primary over HTTPS (tunnel or reverse proxy) when servers talk across the internet.
 
-Only the **leader** needs a public address: followers connect *out* to it, nothing connects in to a follower, so the
-tunnels on the other servers serve OCR clients and play no part in sync. Behind a tunnel the leader needs neither
-`OCRROUTE_HOST=0.0.0.0` nor a firewall rule (the tunnel forwards to `127.0.0.1` on the same machine).
+## Automation (.env)
 
-- On the leader, the Cluster sync page lists its addresses best first: running tunnels, the manual public URL, then
-  LAN. Give followers the first one, as `https://...`.
-- **Use a stable address for the leader.** Cloudflare *quick* tunnels (`*.trycloudflare.com`) and free ngrok URLs
-  (`*.ngrok-free.app`) change on every restart; the page flags them. Prefer a Tailscale name (`*.ts.net`, private to
-  your machines), a Cloudflare named tunnel on your own domain, or an ngrok static domain. If the leader's URL does
-  change, update the leader address on every follower (**Test connection** confirms the new one).
-- The leader's page lists every **follower** (name, address, version, last contact, up to date or behind), so all
-  servers are visible in one place.
-- The token is the only secret: anyone with it can read the leader's configuration through the public URL, so keep it
-  private and regenerate it if it leaks. A Cloudflare Access login in front of the leader blocks followers too:
-  exclude `/v1/sync/*` from that policy, or sync over Tailscale.
+`OCRROUTE_SYNC_ROLE=leader|follower`, `OCRROUTE_SYNC_TOKEN`, `OCRROUTE_SYNC_LEADER_URL` (comma-separated addresses) and
+`OCRROUTE_SYNC_INTERVAL_SECONDS` still work and take priority (the Cluster page is then read-only).
+API: `GET /v1/cluster`, `POST /v1/cluster/create | join | leave | delete`, `POST /v1/sync/nodes/bulk` (returns join
+codes), `PATCH / DELETE /v1/sync/nodes/{key}`, `GET /v1/cluster/members/{key}/join-code`.
+
+## When the leader's address changes
+
+Cloudflare quick tunnels (`*.trycloudflare.com`) and free ngrok URLs get a new random name every time the tunnel
+restarts; the old name disappears from DNS (a follower then fails with "no longer exists"). OcrRoute handles this:
+
+- **Push:** each follower tells the leader how to reach it (its tunnel / public URL). When the leader's own address
+  changes, it sends the new one to every follower within about 20 seconds (`OCRROUTE_SYNC_WATCH_SECONDS`). **Notify
+  followers** on the leader's page sends it immediately. Each server card shows where the follower is reachable and the
+  result of the last notice.
+- **Failover:** followers remember every address of the leader (tunnels, public URL, LAN) and try the others when one
+  stops working; a verified address learned this way is added to the follower's address list.
+- **Safe by design:** a pushed or learned address is never trusted blindly. Before sending its token to a new address,
+  the follower asks that server to prove it knows the token (challenge / response: an HMAC of a random nonce), and that
+  it is the same leader as before. An impostor learns nothing.
+- Errors are explained in plain language, and each distinct problem is logged once (then every 10 minutes).
+
+A stable leader address (Tailscale `*.ts.net`, a Cloudflare named tunnel, an ngrok static domain) remains the most
+reliable setup: the push needs followers to be reachable, and failover needs another working address.
+
+Per-server settings are never synchronised: each server's own **public URL** (Endpoints page) and its sync state.
 
 ## Server cards (leader)
 
 On the leader, **Cluster sync > Servers** shows one card per follower: name, host, address, version, last contact and
 status (up to date, behind, paused, offline after 5 minutes without contact, never connected).
 
-- **Add server** creates a card with **its own token**, shown once with the leader address to paste on that server.
-  Only a hash of the token is stored.
+- **Add followers** adds one or many at once: one row per follower (name, optional address, optional notes), **Add
+  row** for more (or press Enter). Each gets a card with **its own token**, all shown once with the leader address and a
+  **Copy all** button. The optional address is where the follower is reachable, so the leader can announce address
+  changes before it first connects. API: `POST /v1/sync/nodes/bulk` (`{"items": [{"label", "address", "notes"}]}`).
+- Every card has **Edit** (name, address, notes, edited inside the card) and **Delete** (confirmed inside the card),
+  plus Pause / Resume and New token.
 - **Edit** renames the card and sets notes. **Pause / Resume** stops or restarts sending configuration to that server
   (it reports "paused" in its status). **New token** replaces a leaked token (the server stops syncing until it gets
   the new one). **Delete** revokes the server: its own token stops working, and a server that used the shared token

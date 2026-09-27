@@ -239,3 +239,27 @@ def test_surya_collection_skips_its_demo_scripts(monkeypatch, tmp_path):
     assert {v for f, v in pairs if f == '--exclude-module'} == {'surya.scripts', 'surya.debug'}
     assert ('--collect-data', 'surya') in pairs
     assert 'surya.scripts' not in sys.modules  # nothing was imported to list the modules
+
+
+def test_native_startup_noise_is_filtered_but_real_errors_are_kept(capfd):
+    import os
+
+    from ocrroute.stdio import filteredNativeStderr
+
+    with filteredNativeStderr():
+        os.write(2, b"WARNING: All log messages before absl::InitializeLog() is called are written to STDERR\n")
+        os.write(2, b"I0000 00:00:1790440718.873318 26452 port.cc:153] oneDNN custom operations are on. You may see...\n")
+        os.write(2, b"E0000 real native error: could not open model file\n")
+    err = capfd.readouterr().err
+    assert 'real native error' in err
+    assert 'oneDNN' not in err and 'absl::InitializeLog' not in err
+
+
+def test_pasted_panel_links_become_the_base_url():
+    from ocrroute import sync
+
+    assert sync.baseUrl('http://127.0.0.1:20256/panel') == 'http://127.0.0.1:20256'
+    assert sync.baseUrl('https://ocr.example.com/v1/docs') == 'https://ocr.example.com'
+    assert sync.baseUrl('https://example.com/ocr/panel/cluster') == 'https://example.com/ocr'
+    assert sync.normaliseLeaders(['http://10.0.0.5:20256/panel/'])[0]['url'] == 'http://10.0.0.5:20256'
+    assert sync.isLoopback('http://127.0.0.1:20256') and not sync.isLoopback('http://192.168.1.10:20256')

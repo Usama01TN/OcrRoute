@@ -23,6 +23,55 @@
 - **Fix: the Cluster sync page switched back to the saved role every 10 seconds** (e.g. "Leader") while you were editing:
   the periodic refresh now updates only the status and server cards, never the form, and pauses while there are unsaved
   edits. Followers explain refusals from the leader (paused, removed, token replaced).
+- **Fix: `Exception in thread ocrroute-sync-watch ... AttributeError: 'NoneType' object has no attribute 'is_set'`**
+  after changing the cluster role: the old address watcher read the manager's stop event, which the reconfiguration had
+  just cleared. Each watcher now owns its stop event (tested with five quick role changes).
+- **Pasted panel / API links are cleaned**: `http://host:20256/panel`, `.../panel/cluster`, `.../v1/docs` become the
+  server's base URL (a reverse-proxy prefix such as `/ocr` is kept), in join codes, member addresses and the public URL.
+  Loopback addresses (`127.0.0.1`, `localhost`) come last in join codes and are marked "this computer only".
+- **"is not a sync leader" is explained**: the member asks the address what it is and says whether it is this server
+  itself, a member, or a server that is not the primary of a cluster.
+- **TensorFlow start-up noise removed for good**: newer TensorFlow prints "oneDNN custom operations are on" and the absl
+  "All log messages before absl::InitializeLog()" line from C++ (ignoring `TF_CPP_MIN_LOG_LEVEL`). While engines load,
+  OcrRoute now filters file descriptor 2 itself and passes every other line (real warnings, errors) through.
+  `OCRROUTE_VERBOSE_DISCOVERY=1` shows everything.
+- **Cluster sync reworked into a standard cluster model** (like Proxmox "create / join cluster", Docker Swarm join
+  tokens): **Create a cluster** on the primary, **Add servers** (one or many) to get one **join code** each, paste it on
+  the other server under **Join a cluster**. No roles, tokens or addresses to type. Every server shows the member list
+  with statuses; on the primary each member card has **Edit** and **Remove**, plus Show join code, New join code and
+  Pause. Members can **Leave cluster**; the primary can **Delete cluster**. Join codes carry all primary addresses
+  (failover, address updates) and a checksum (damaged copies are refused with a clear message).
+- Fix: a server joining for the first time failed the primary's proof check (its card was not linked to a server id
+  yet); the join now identifies its card by the stored token hash. A removed server is told it was removed instead of
+  "invalid token".
+- **Several leader addresses on a follower**: add one or many (address + optional label), each card with **Edit**,
+  **Delete**, **Make primary** and **Test**, and its own health (last success / last error, in use). The follower uses
+  the first that works in your order, stays on a working backup and retries the primary every 10 minutes; addresses
+  learned from the leader are appended (marked) instead of replacing yours. Changes apply at once on a server that
+  already follows. `.env`: comma-separated `OCRROUTE_SYNC_LEADER_URL`. API: `leader_urls` in `PUT /v1/sync/config`.
+- **Add one or many followers at once** (rows with name, optional address, notes; Enter adds a row); every new token is
+  shown once with **Copy all**. Every follower card has **Edit** (in-card form: name, address, notes) and **Delete**
+  (in-card confirmation), plus Pause / Resume and New token. No browser pop-ups (`prompt` / `confirm`) any more.
+- Fix: the copy buttons failed on plain `http://` pages (LAN addresses) and when clipboard permission is refused;
+  they fall back to the classic copy, or ask to press Ctrl+C.
+- **Leader address changes are handled automatically** (quick-tunnel restarts: "Failed to resolve ...trycloudflare.com").
+  Followers report how to reach them; the leader pushes its new address when it changes (watcher, ~20 s) or on **Notify
+  followers**. Followers remember all leader addresses and fail over, updating the saved address. Pushed / learned
+  addresses are verified by challenge / response (HMAC of a nonce with the follower's token) before the token is sent,
+  so an impostor learns nothing. Card tokens are also stored encrypted for these proofs.
+- **Plain-language sync errors** (DNS gone, quick-tunnel URL changed, refused, timeout, certificate, tunnel up but
+  leader stopped) instead of raw `HTTPSConnectionPool` text; each distinct error is logged once, then every 10 minutes.
+- **Fix: each server's public URL (Endpoints page) was overwritten by the leader's** through settings sync; it is now
+  per-server, like the sync state.
+- TensorFlow / gRPC C++ start-up noise ("oneDNN custom operations are on", "All log messages before
+  absl::InitializeLog()") is hidden by default (`TF_CPP_MIN_LOG_LEVEL=2`); set it to 0 to see it.
+- Server cards show the follower's reported addresses and the last address notice; the follower status shows the
+  address in use and the leader's known addresses. Tested end to end with a killed "tunnel", a dead DNS name, and an
+  impostor leader.
+- **Fix: "fill is not defined" on the Cluster sync page.** An editing step deleted the middle of the page script (form
+  filling, live refresh, card actions); the script still parsed, so the check missed it. The script was rewritten, and a
+  new test drives the page in a real headless Chromium: no JavaScript error, the chosen role survives the refresh, and
+  every server-card action works from the buttons.
 - Fix: `server_id` (Endpoints page) was the same for every installation on a host because it read a misnamed settings
   attribute and fell back to the hostname; it now derives from the secret key file (or the home path).
 - **Automatic releases**: a push to `main` whose `ocrroute/version.py` carries a version without a `v<version>` tag is
