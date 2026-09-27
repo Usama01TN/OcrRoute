@@ -175,6 +175,13 @@ if _safeDiscoveryEnabled():
         _sys.modules[_name] = None
         _sys.modules['AioOCR.' + _name] = None
 
+import os as _envOs  # noqa: E402
+
+# TensorFlow (keras-ocr, Calamari) and gRPC print C++ INFO lines ("oneDNN custom operations are on", "All log messages
+# before absl::InitializeLog()...") at import. Keep warnings and errors; hide that noise unless the user asks for it.
+for _k, _v in (('TF_CPP_MIN_LOG_LEVEL', '2'), ('GRPC_VERBOSITY', 'ERROR'), ('GLOG_minloglevel', '2')):
+    _envOs.environ.setdefault(_k, _v)
+
 from ocrroute import paddleenv as _paddleEnv  # noqa: E402
 
 _paddleEnv.apply()  # MKLDNN default, model source for Paddle 3.0, local font (see ocrroute/paddleenv.py)
@@ -202,8 +209,10 @@ IMPORT_WARNINGS = []  # AioOCR's "Could not import ..." lines; the Engines page 
 
 def _captureWarnings(fn):
     """Run ``fn`` with stdout captured: AioOCR reports missing optional dependencies with print()."""
+    from ocrroute.stdio import filteredNativeStderr
+
     buf = _io.StringIO()
-    with _redirectStdout(buf):
+    with filteredNativeStderr(), _redirectStdout(buf):  # engines print native start-up noise (TensorFlow oneDNN / absl)
         fn()
     lines = [ln for ln in buf.getvalue().splitlines() if ln.strip()]
     del IMPORT_WARNINGS[:]

@@ -56,7 +56,7 @@ NAV_GROUPS = [
     ]),
     ('system', 'System', [
         ('tools', 'Tools', 'Reserved for extensions', '/panel/tools', 'tools'),
-        ('cluster', 'Cluster sync', 'Share configuration between servers', '/panel/cluster', 'diagram-3'),
+        ('cluster', 'Cluster', 'Share configuration between servers', '/panel/cluster', 'diagram-3'),
         ('settings', 'Settings', 'Runtime configuration', '/panel/settings', 'sliders'),
         ('doctor', 'Doctor', 'Diagnostics and health', '/panel/doctor', 'heart-pulse'),
     ]),
