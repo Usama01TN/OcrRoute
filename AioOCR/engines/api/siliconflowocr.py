@@ -53,7 +53,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _HOSTS = {'com': 'https://api.siliconflow.com', 'cn': 'https://api.siliconflow.cn'}
 _CHAT_PATH = '/v1/chat/completions'
@@ -89,10 +89,12 @@ _OCR_PROMPT = (
 )
 
 
-class SiliconFlowOcr(OCRPlugin):
+class SiliconFlowOcr(LanguageHintPlugin, OCRPlugin):
     """
     SiliconFlowOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: dead model id -> discovered replacement (process-wide).
     _model_upgrades = {}
     #: api -> host base that authenticated ('com'/'cn' base URL).

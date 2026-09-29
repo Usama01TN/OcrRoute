@@ -64,6 +64,10 @@ class TrOcr(OCRPlugin):
     """
     TrOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
     #: model name -> (processor, model, device), loaded once.
     _engines = {}
     #: shared RapidOCR detection engine (detection-only calls).

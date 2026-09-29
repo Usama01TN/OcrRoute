@@ -42,7 +42,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 _MODELS_ENDPOINT = 'https://api.openai.com/v1/models'
@@ -68,10 +68,12 @@ _OCR_PROMPT = (
 )
 
 
-class ChatGptOcr(OCRPlugin):
+class ChatGptOcr(LanguageHintPlugin, OCRPlugin):
     """
     ChatGptOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ('gpt-5', 'gpt-5-mini', 'gpt-5-nano', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini')
     #: dead model id -> discovered replacement (process-wide).
     _model_upgrades = {}
 

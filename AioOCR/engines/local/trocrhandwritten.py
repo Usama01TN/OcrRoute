@@ -55,6 +55,8 @@ class TrOcrHandwritten(TrOcr):
     """
     TrOcrHandwritten class.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
 
     def __init__(self, *args, **kwargs):
         """

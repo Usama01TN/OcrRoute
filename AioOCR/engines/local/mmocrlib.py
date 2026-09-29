@@ -69,6 +69,8 @@ class MmOcr(OCRPlugin):
     process-wide, so building several ``MmOcr`` instances with the same
     models re-uses the loaded weights.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en', 'zh']
     #: Default text detector (ResNet-18 DBNet, light and reliable).
     #: ``'DBNet'``/``'DBNetpp'`` alias the oCLIP variants, which pull an
     #: extra backbone checkpoint on first use.

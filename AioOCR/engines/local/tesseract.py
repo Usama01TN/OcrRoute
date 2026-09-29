@@ -67,10 +67,41 @@ _KEEP_FLOOR = 40.0
 _TARGET_SIZE = 2000
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
 class Tesseract(OCRPlugin):
     """
     Tesseract class.
     """
+    MULTI_LANGUAGE = True  # several languages in one run
+
+    _installed = None  # canonical codes of the installed traineddata (cached per process)
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """
+        :return: list[str]  the languages whose traineddata is installed (``tesseract --list-langs``), as canonical
+                 codes; Tesseract cannot detect the language itself, so there is no ``'auto'``
+        """
+        if cls._installed is None:
+            try:
+                import pytesseract
+
+                natives = [n for n in pytesseract.get_languages(config='') if n not in ('osd', 'equ', 'snum')]
+                cls._installed = sorted(_languages.fromEngineCodes(natives))
+            except Exception:  # noqa: BLE001 - Tesseract missing: the languages it could use once installed
+                cls._installed = sorted(c for c, l in _languages.LANGUAGES.items() if l['tesseract'])
+        return list(cls._installed)
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        entry = _languages.LANGUAGES.get(code)
+        return entry['tesseract'] if entry and entry['tesseract'] else code
+
 
     def __init__(self, *args, **kwargs):
         """
@@ -97,12 +128,9 @@ class Tesseract(OCRPlugin):
     # ------------------------------------------------------------------ #
     def _tessLang(self):
         """
-        Build a tesseract language string like 'eng+fra'.
+        Build a tesseract language string like 'eng+fra' from the requested languages (any spelling).
         """
-        langs = self.getLanguage()
-        if isinstance(langs, str):
-            langs = [langs]
-        return '+'.join(_LANG_MAP.get(l, l) for l in langs) or 'eng'
+        return '+'.join(self.getEngineLanguages()) or 'eng'
 
     def _loadPil(self):
         """

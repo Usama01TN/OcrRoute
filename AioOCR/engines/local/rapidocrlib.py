@@ -73,8 +73,54 @@ class RapidOcr(OCRPlugin):
     # ------------------------------------------------------------------ #
     # Engine                                                             #
     # ------------------------------------------------------------------ #
+    #: RapidOCR 2/3 recognition models (``Rec.lang_type``) by canonical code. Latin-script languages share the
+    #: ``latin`` model; ``cyrillic`` and ``devanagari`` are script models too. Verified against ``rapidocr.LangRec``
+    #: at runtime when the library is installed (unknown values are dropped).
+    _RAPID = {'zh': 'ch', 'en': 'en', 'ja': 'japan', 'ko': 'korean', 'zh-Hant': 'chinese_cht', 'ar': 'arabic',
+              'ta': 'ta', 'te': 'te', 'ka': 'ka', 'el': 'el', 'th': 'th', 'es': 'es', 'ru': 'cyrillic',
+              'uk': 'cyrillic', 'bg': 'cyrillic', 'sr': 'cyrillic', 'be': 'cyrillic', 'mn': 'cyrillic',
+              'hi': 'devanagari', 'mr': 'devanagari', 'ne': 'devanagari', 'sa': 'devanagari',
+              'fr': 'latin', 'de': 'latin', 'it': 'latin', 'pt': 'latin', 'nl': 'latin', 'pl': 'latin', 'cs': 'latin',
+              'sv': 'latin', 'da': 'latin', 'no': 'latin', 'fi': 'latin', 'hu': 'latin', 'ro': 'latin', 'tr': 'latin',
+              'hr': 'latin', 'sk': 'latin', 'sl': 'latin', 'lt': 'latin', 'lv': 'latin', 'et': 'latin', 'id': 'latin',
+              'ms': 'latin', 'vi': 'latin', 'tl': 'latin', 'sq': 'latin', 'eu': 'latin', 'ca': 'latin', 'gl': 'latin',
+              'is': 'latin', 'ga': 'latin', 'cy': 'latin', 'af': 'latin', 'sw': 'latin', 'la': 'latin', 'mt': 'latin'}
+    _known = None
+
+    @classmethod
+    def _knownTypes(cls):
+        if cls._known is None:
+            try:
+                from rapidocr import LangRec
+
+                cls._known = {str(getattr(v, 'value', v)) for v in LangRec}
+            except Exception:  # noqa: BLE001 - not installed, or an older version without LangRec: trust the table
+                cls._known = set(cls._RAPID.values())
+        return cls._known
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  the languages RapidOCR has a recognition model for (Chinese + English by default;
+                 no auto-detection: the model is chosen by the language)"""
+        known = cls._knownTypes()
+        return sorted(c for c, t in cls._RAPID.items() if t in known)
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return cls._RAPID.get(code, code)
+
+    def _engineParamsForLanguage(self):
+        """The constructor parameters, plus ``Rec.lang_type`` for the chosen language unless the user set one."""
+        params = dict(self.__m_engine_params)
+        if not any(k.endswith('lang_type') for k in params):
+            langs = [c for c in self.getEngineLanguages() if c not in ('auto', 'ch', 'en')]  # ch/en: the default models
+            if langs:
+                params['Rec.lang_type'] = langs[0]
+        return params
+
     def _engine(self):
-        key = tuple(sorted(self.__m_engine_params.items()))
+        params = self._engineParamsForLanguage()
+        key = tuple(sorted(params.items()))
         if key in RapidOcr._engines:
             return RapidOcr._engines[key]
         if self.__m_quiet:
@@ -83,14 +129,14 @@ class RapidOcr(OCRPlugin):
         try:
             from rapidocr import RapidOCR as Engine
             RapidOcr._generation = 'v2'
-            engine = Engine(params=self.__m_engine_params) if self.__m_engine_params else Engine()
+            engine = Engine(params=params) if params else Engine()
         except ImportError:
             try:
                 from rapidocr_onnxruntime import RapidOCR as Engine
             except ImportError:
                 raise OCRError('RapidOCR is not installed. Run: pip install rapidocr onnxruntime')
             RapidOcr._generation = 'v1'
-            engine = Engine(**self.__m_engine_params)
+            engine = Engine(**{k: v for k, v in params.items() if '.' not in k})  # v1 has no lang_type parameter
         RapidOcr._engines[key] = engine
         return engine
 

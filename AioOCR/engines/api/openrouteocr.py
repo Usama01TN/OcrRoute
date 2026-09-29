@@ -39,7 +39,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions'
 _MODELS_ENDPOINT = 'https://openrouter.ai/api/v1/models'
@@ -59,10 +59,27 @@ _OCR_PROMPT = (
 )
 
 
-class OpenRouterOcr(OCRPlugin):
+class OpenRouterOcr(LanguageHintPlugin, OCRPlugin):
     """
     OpenRouterOcr class.
     """
+    DEFAULT_MODEL = _FREE_ROUTER
+    MODELS = (_FREE_ROUTER, 'google/gemini-2.5-flash', 'openai/gpt-4o-mini', 'anthropic/claude-sonnet-4.5', 'qwen/qwen2.5-vl-72b-instruct:free')
+
+    def _liveModels(self):
+        """OpenRouter's public catalogue, kept to models that take images (input_modalities); free ones first."""
+        from requests import get
+
+        r = get(_MODELS_ENDPOINT, timeout=self.getTimeout(), proxies=self.getProxy() or None)
+        r.raise_for_status()
+        vision = []
+        for m in r.json().get('data', []):
+            arch = m.get('architecture') or {}
+            mods = arch.get('input_modalities') or ([] if not arch.get('modality') else [arch['modality']])
+            if any('image' in str(x) for x in mods) and m.get('id'):
+                vision.append(m['id'])
+        free = [m for m in vision if m.endswith(':free')]
+        return [_FREE_ROUTER] + free + [m for m in vision if not m.endswith(':free')]
 
     def __init__(self, *args, **kwargs):
         """

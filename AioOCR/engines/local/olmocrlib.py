@@ -57,16 +57,18 @@ except ImportError:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 #: YAML front matter block at the top of olmOCR-2 replies.
 _FRONT_MATTER = compile(r'^\s*---\s*\n.*?\n---\s*\n', DOTALL)
 
 
-class OlmOcrLib(OCRPlugin):
+class OlmOcrLib(LanguageHintPlugin, OCRPlugin):
     """
     OlmOcrLib class.
     """
+    DEFAULT_MODEL = 'allenai/olmOCR-2-7B-1025'
+    MODELS = ()
     #: (model_name, device) -> (model, processor).
     _models = {}
 

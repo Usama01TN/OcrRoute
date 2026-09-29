@@ -38,6 +38,8 @@ class CalamariOcr(OCRPlugin):
     """
     CalamariOcr class.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
     _predictors = {}
 
     def __init__(self, *args, **kwargs):

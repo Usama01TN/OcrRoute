@@ -41,7 +41,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://api.perplexity.ai/chat/completions'
 _DEFAULT_MODEL = 'sonar'
@@ -64,10 +64,12 @@ _OCR_PROMPT = (
 )
 
 
-class PerplexityOcr(OCRPlugin):
+class PerplexityOcr(LanguageHintPlugin, OCRPlugin):
     """
     PerplexityOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = _FALLBACK_MODELS
     #: dead model id -> working replacement (process-wide).
     _model_upgrades = {}
 

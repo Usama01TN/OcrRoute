@@ -58,7 +58,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'nanonets/Nanonets-OCR2-3B'
 #: The card's official OCR prompt (verbatim).
@@ -71,10 +71,12 @@ _SYSTEM = 'You are a helpful assistant.'
 _PDF_DPI = 300.0
 
 
-class NanonetsOcr2(OCRPlugin):
+class NanonetsOcr2(LanguageHintPlugin, OCRPlugin):
     """
     NanonetsOcr2 class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: model name -> (processor, model, device), loaded once.
     _engines = {}
 

@@ -21,6 +21,8 @@ class KerasOcr(OCRPlugin):
     """
     KerasOcr class.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
     #: One pipeline for the whole process: constructing it downloads and
     #: loads the detector + recognizer models, which is very slow.
     _pipeline = None

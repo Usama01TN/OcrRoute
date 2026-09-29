@@ -74,6 +74,10 @@ class NougatLib(OCRPlugin):
     """
     NougatLib class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
     #: (checkpoint, full_precision) -> NougatModel, once per process.
     _engines = {}
 

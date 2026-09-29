@@ -50,7 +50,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError, is_url
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError, is_url
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError, is_url
 
 #: Tasks this plugin can ask for.
 TASKS = ('boxes', 'text', 'markdown', 'html', 'latex', 'table', 'formula', 'kv')
@@ -99,7 +99,7 @@ NORMALIZED_FAMILIES = ('qwen3_vl', 'qwen3_vl_moe', 'qwen3_5_vl')
 RESIZED_FAMILIES = ('qwen2_vl', 'qwen2_5_vl')
 
 
-class QwenVlOcr(OCRPlugin):
+class QwenVlOcr(LanguageHintPlugin, OCRPlugin):
     """
     Local Qwen-VL engine (Hugging Face ``transformers``).
     Weights are downloaded once by ``transformers`` into its own cache,
@@ -107,6 +107,8 @@ class QwenVlOcr(OCRPlugin):
     several ``QwenVlOcr`` instances with the same settings share one
     copy of the weights.
     """
+    DEFAULT_MODEL = MODELS[0]
+    MODELS = MODELS
     #: Vertical gap inserted between stacked PDF pages, in pixels.
     PAGE_GAP = 20.0
     #: Rendering scale used for PDF pages (72 dpi * scale).

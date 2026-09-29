@@ -43,10 +43,51 @@ class SourceError(OCRError):
     """
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
+#: OCR.Space's own language codes (https://ocr.space/ocrapi): 3 letters, not ISO 639-2 for every language
+_SPACE = {'ar': 'ara', 'bg': 'bul', 'zh': 'chs', 'zh-Hant': 'cht', 'hr': 'hrv', 'cs': 'cze', 'da': 'dan', 'nl': 'dut',
+          'en': 'eng', 'fi': 'fin', 'fr': 'fre', 'de': 'ger', 'el': 'gre', 'hu': 'hun', 'ko': 'kor', 'it': 'ita',
+          'ja': 'jpn', 'pl': 'pol', 'pt': 'por', 'ru': 'rus', 'sl': 'slv', 'es': 'spa', 'sv': 'swe', 'tr': 'tur'}
+
+
 class OcrSpace(OCRPlugin):
     """
     OcrSpace class.
     """
+
+    @classmethod
+    def getEngines(cls):
+        """:return: list[dict]  OCR.Space engines 1, 2 and 3 (their languages differ)"""
+        return [{'value': 1, 'label': 'Engine 1 (24 languages, fastest)', 'default': False},
+                {'value': 2, 'label': 'Engine 2 (auto-detection, Latin script and more)', 'default': True},
+                {'value': 3, 'label': 'Engine 3 (200+ languages, handwriting, auto-detection only)', 'default': False}]
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """
+        Engine 1: the 24 coded languages (no auto-detection; default English). Engine 2: ``'auto'`` plus the coded
+        languages. Engine 3: ``'auto'`` only (the documented way to use its 200+ languages).
+        """
+        try:
+            number = int(engine) if engine not in (None, '') else 2
+        except (TypeError, ValueError):
+            number = 2
+        coded = sorted(_SPACE)
+        if number == 1:
+            return coded
+        if number == 3:
+            return [_languages.AUTO]
+        return [_languages.AUTO] + coded
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return _languages.AUTO if code == _languages.AUTO else _SPACE.get(code, code)
+
 
     def __init__(self, *args, **kwargs):
         """
@@ -56,7 +97,7 @@ class OcrSpace(OCRPlugin):
         :param kwargs: extra payload settings forwarded to the API (isTable, detectOrientation, scale, ...).
         """
         api = kwargs.pop('api', environ.get('OCR_SPACE_API', 'helloworld'))
-        language = kwargs.pop('language', 'eng')
+        language = kwargs.pop('language', None)  # any spelling ('ar', 'ara', 'Arabic'...): translated per request
         engine = kwargs.pop('engine', 2)
         # API payload extras = whatever is left that is not reserved.
         extras = {k: v for k, v in kwargs.items() if k not in _RESERVED}
@@ -68,13 +109,13 @@ class OcrSpace(OCRPlugin):
             self.setApiList([api])
         self.setApi(self.getApiList()[0])
         self.setEngine(engine)
+        self.setLanguage(language if language else self.defaultLanguage(engine))
         self.setEndpoint('https://api.ocr.space/parse/image')
         payload = {
             'detectOrientation': True,
             'scale': True,
             'isTable': True,
             'isOverlayRequired': True,
-            'language': language,
             'OCREngine': self.getEngine(),
         }
         payload.update(extras)
@@ -107,6 +148,8 @@ class OcrSpace(OCRPlugin):
         Send one request to OCR.Space and return the JSON reply.
         """
         data = dict(self.getPayload())
+        data['OCREngine'] = self.getEngine()
+        data['language'] = self.getEngineLanguages()[0]  # OCR.Space takes one language, in its own code
         data['apikey'] = self.getApi()
         kwargs = {'timeout': self.getTimeout(), 'data': data}
         if self.getProxy():

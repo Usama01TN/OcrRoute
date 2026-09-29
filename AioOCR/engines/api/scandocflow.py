@@ -55,10 +55,26 @@ _LANG_MAP = {'en': 'eng', 'fr': 'fra', 'de': 'deu', 'es': 'spa',
 _GRID = 1000.0
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
 class ScanDocFlow(OCRPlugin):
     """
     ScanDocFlow class.
     """
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  ``'auto'`` plus the languages the API documents (see ``_LANG_MAP``)"""
+        return [_languages.AUTO] + sorted(_LANG_MAP)
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return _LANG_MAP.get(code, code)
+
 
     def __init__(self, *args, **kwargs):
         """
@@ -81,10 +97,8 @@ class ScanDocFlow(OCRPlugin):
         if docType not in _TYPES:
             raise OCRError('Unknown type {!r}; choose from {}'.format(docType, ', '.join(_TYPES)))
         self.__m_type = docType
-        language = kwargs.pop('language', 'auto')
-        if isinstance(language, (list, tuple)):
-            language = language[0] if language else 'auto'
-        self.setLanguage(_LANG_MAP.get(str(language).lower(), str(language)))
+        # any spelling; the base class stores it (it would overwrite a value set here) and it is translated per request
+        kwargs['language'] = kwargs.get('language') or _languages.AUTO
         self.__m_page_count = kwargs.pop('pageCount', None)
         self.__m_page_offset = kwargs.pop('pageOffset', None)
         self.__m_retain = bool(kwargs.pop('retain', False))
@@ -99,7 +113,7 @@ class ScanDocFlow(OCRPlugin):
     # Request building                                                   #
     # ------------------------------------------------------------------ #
     def _formFields(self):
-        fields = {'type': self.__m_type, 'lang': self.getLanguage(), 'retain': 'true' if self.__m_retain else 'false'}
+        fields = {'type': self.__m_type, 'lang': self.getEngineLanguages()[0], 'retain': 'true' if self.__m_retain else 'false'}
         if self.__m_page_count is not None:
             fields['pageCount'] = str(int(self.__m_page_count))
         if self.__m_page_offset is not None:

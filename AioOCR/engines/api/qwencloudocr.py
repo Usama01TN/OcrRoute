@@ -55,7 +55,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError, is_url
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError, is_url
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError, is_url
 
 
 #: Built-in OCR tasks, exactly as the API names them.
@@ -117,13 +117,15 @@ TASK_PROMPTS = {
 }
 
 
-class QwenCloudOcr(OCRPlugin):
+class QwenCloudOcr(LanguageHintPlugin, OCRPlugin):
     """
     QwenCloud (Alibaba DashScope) Qwen-OCR engine.
     Online engine: every call is an HTTPS request to QwenCloud with the
     image as a data URI (or passed through as a URL). Nothing is written
     to disk, and PDFs are rasterized in memory.
     """
+    DEFAULT_MODEL = MODELS[2]
+    MODELS = MODELS
     #: Multimodal generation path on the DashScope-native interface.
     DASHSCOPE_PATH = '/api/v1/services/aigc/multimodal-generation/generation'
     #: Chat path on the OpenAI-compatible interface.

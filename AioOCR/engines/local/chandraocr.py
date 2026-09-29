@@ -41,7 +41,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'datalab-to/chandra-ocr-2'
 #: Prompt for the raw-transformers path (the chandra library manages
@@ -52,10 +52,12 @@ _PROMPT = ('Convert this document page to Markdown. Preserve the reading order, 
 _PDF_SCALE = 200.0 / 72.0
 
 
-class ChandraOcr(OCRPlugin):
+class ChandraOcr(LanguageHintPlugin, OCRPlugin):
     """
     ChandraOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: (model, method) -> loaded engine tuple, loaded once.
     _engines = {}
 

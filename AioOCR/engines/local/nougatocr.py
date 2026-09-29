@@ -49,6 +49,10 @@ class NougatOcr(OCRPlugin):
     """
     NougatOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en']
     #: model name -> (processor, model, device), loaded once.
     _engines = {}
 

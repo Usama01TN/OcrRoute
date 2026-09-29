@@ -39,7 +39,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://api.anthropic.com/v1/messages'
 _API_VERSION = '2023-06-01'
@@ -59,10 +59,21 @@ _OCR_PROMPT = (
 )
 
 
-class ClaudeOcr(OCRPlugin):
+class ClaudeOcr(LanguageHintPlugin, OCRPlugin):
     """
     ClaudeOcr class.
     """
+    DEFAULT_MODEL = 'claude-sonnet-4-6'
+    MODELS = ('claude-sonnet-4-6', 'claude-opus-4-1', 'claude-sonnet-4-5', 'claude-haiku-4-5-20251001', 'claude-3-5-sonnet-latest')
+
+    def _liveModels(self):
+        """Anthropic's model catalogue (GET /v1/models): every current Claude model reads images."""
+        from requests import get
+
+        r = get('https://api.anthropic.com/v1/models', headers={'x-api-key': self.getApi(), 'anthropic-version': _API_VERSION},
+                params={'limit': 100}, timeout=self.getTimeout(), proxies=self.getProxy() or None)
+        r.raise_for_status()
+        return [m['id'] for m in r.json().get('data', []) if m.get('id')]
 
     def __init__(self, *args, **kwargs):
         """

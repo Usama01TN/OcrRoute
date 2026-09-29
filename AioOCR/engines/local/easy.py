@@ -3,7 +3,6 @@
 EasyOCR plugin.
 """
 from os.path import dirname
-from easyocr import Reader
 from sys import path
 
 if dirname(__file__) not in path:
@@ -17,10 +16,40 @@ except:
     from engines.ocrplugin import OCRPlugin
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
+#: EasyOCR's own language codes (easyocr/config.py, 1.7.2)
+_EASY_CODES = ['abq', 'ady', 'af', 'ang', 'ar', 'as', 'ava', 'az', 'be', 'bg', 'bgc', 'bh', 'bho', 'bn', 'bs', 'ch_sim', 'ch_tra', 'che', 'cs', 'cy', 'da', 'dar', 'de', 'en', 'es', 'et', 'fa', 'fr', 'ga', 'gom', 'hi', 'hr', 'hu', 'id', 'inh', 'is', 'it', 'ja', 'kbd', 'kn', 'ko', 'ku', 'la', 'lbe', 'lez', 'lt', 'lv', 'mah', 'mai', 'mi', 'mn', 'mni', 'mr', 'ms', 'mt', 'ne', 'new', 'nl', 'no', 'oc', 'pi', 'pl', 'pt', 'ro', 'rs_cyrillic', 'rs_latin', 'ru', 'sa', 'sck', 'sk', 'sl', 'sq', 'sv', 'sw', 'ta', 'tab', 'te', 'th', 'tjk', 'tl', 'tr', 'ug', 'uk', 'ur', 'uz', 'vi']
+_EASY = _languages.fromEngineCodes(_EASY_CODES)
+
+
 class EasyOCR(OCRPlugin):
     """
     EasyOCR class.
     """
+    MULTI_LANGUAGE = True  # a list of languages, with EasyOCR's combination rules (easyocr/easyocr.py):
+    #: each group may be combined within itself plus English; Latin-script languages (everything else) combine freely
+    LANGUAGE_GROUPS = [
+        ['zh'], ['zh-Hant'], ['ja'], ['ko'], ['th'], ['ta'], ['te'], ['kn'],
+        ['bn', 'as', 'mni'],                                     # Bengali script
+        ['ar', 'fa', 'ug', 'ur'],                                # Arabic script
+        ['hi', 'mr', 'ne', 'bh', 'mai', 'ang', 'bho', 'mah', 'sck', 'new', 'gom', 'sa', 'bgc'],  # Devanagari
+        ['ru', 'sr', 'be', 'bg', 'uk', 'mn', 'abq', 'ady', 'kbd', 'av', 'dar', 'inh', 'ce', 'lbe', 'lez', 'tab', 'tg'],  # Cyrillic
+    ]
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  EasyOCR's languages as canonical codes (no auto-detection)"""
+        return sorted(_EASY)
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return _EASY.get(code, code)
+
 
     #: Reader cache shared by all instances: model loading is expensive,
     #: so reuse one Reader per language combination.
@@ -42,11 +71,11 @@ class EasyOCR(OCRPlugin):
         """
         Return a cached Reader for the current language set.
         """
-        langs = self.getLanguage()
-        if isinstance(langs, str):
-            langs = [langs]
+        langs = self.getEngineLanguages()  # 'zh' -> 'ch_sim', 'auto' -> English...
         key = (tuple(sorted(langs)), self.__m_gpu)
         if key not in EasyOCR._readers:
+            from easyocr import Reader
+
             EasyOCR._readers[key] = Reader(list(langs), gpu=self.__m_gpu)
         return EasyOCR._readers[key]
 

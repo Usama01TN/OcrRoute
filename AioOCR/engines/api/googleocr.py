@@ -42,10 +42,23 @@ _MODES = {'text': 'TEXT_DETECTION', 'document': 'DOCUMENT_TEXT_DETECTION'}
 _BREAKS_WITH_SPACE = frozenset(('SPACE', 'SURE_SPACE', 'EOL_SURE_SPACE', 'LINE_BREAK'))
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
 class GoogleOcr(OCRPlugin):
     """
     GoogleOcr class.
     """
+    MULTI_LANGUAGE = True  # several languages in one run
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  ``'auto'`` (no hint: Vision detects the language) plus every known language as a hint"""
+        return [_languages.AUTO] + sorted(_languages.LANGUAGES)
+
 
     def __init__(self, *args, **kwargs):
         """
@@ -103,11 +116,9 @@ class GoogleOcr(OCRPlugin):
 
     def _body(self):
         request = {'image': self._imagePart(), 'features': [{'type': self.__m_feature}]}
-        languages = self.getLanguage()
-        if languages and languages != ['en']:
-            if isinstance(languages, str):
-                languages = [languages]
-            request['imageContext'] = {'languageHints': [str(l) for l in languages]}
+        hints = [c for c in self.getEngineLanguages() if c != _languages.AUTO]  # BCP-47 codes
+        if hints:
+            request['imageContext'] = {'languageHints': hints}
         return {'requests': [request]}
 
     # ------------------------------------------------------------------ #

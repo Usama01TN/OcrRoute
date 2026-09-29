@@ -65,6 +65,8 @@ class OpenOcr(OCRPlugin):
     are cached process-wide, so several ``OpenOcr`` instances sharing the
     same settings re-use the loaded models.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en', 'zh']
     #: Vertical gap inserted between stacked PDF pages, in pixels.
     PAGE_GAP = 20.0
     #: Rendering scale used for PDF pages (72 dpi * scale).

@@ -45,6 +45,8 @@ class AimlApiOcr(OCRPlugin):
     """
     AimlApiOcr class.
     """
+    DEFAULT_MODEL = 'mistral-ocr-latest'
+    MODELS = _MODELS
 
     def __init__(self, *args, **kwargs):
         """

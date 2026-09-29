@@ -30,7 +30,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
 #: Gemini box_2d coordinates are normalized to this grid.
@@ -45,10 +45,26 @@ _OCR_PROMPT = (
 )
 
 
-class GeminiOcr(OCRPlugin):
+class GeminiOcr(LanguageHintPlugin, OCRPlugin):
     """
     GeminiOcr class.
     """
+    DEFAULT_MODEL = 'gemini-2.5-flash'
+    MODELS = ('gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-2.0-flash')
+
+    def _liveModels(self):
+        """Google's model catalogue (GET v1beta/models): the models that support generateContent (Gemini reads images)."""
+        from requests import get
+
+        r = get('https://generativelanguage.googleapis.com/v1beta/models', params={'key': self.getApi(), 'pageSize': 200},
+                timeout=self.getTimeout(), proxies=self.getProxy() or None)
+        r.raise_for_status()
+        out = []
+        for m in r.json().get('models', []):
+            name = str(m.get('name', ''))[len('models/'):]
+            if 'generateContent' in (m.get('supportedGenerationMethods') or []) and name.startswith('gemini'):
+                out.append(name)
+        return out
     #: Learned model replacements (old -> new), shared by all instances
     #: so the deprecated-model dance happens at most once per process.
     _model_upgrades = {}

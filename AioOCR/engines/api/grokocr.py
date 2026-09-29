@@ -45,7 +45,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _ENDPOINT = 'https://api.x.ai/v1/chat/completions'
 _MODELS_ENDPOINT = 'https://api.x.ai/v1/models'
@@ -70,10 +70,12 @@ _OCR_PROMPT = (
 )
 
 
-class GrokOcr(OCRPlugin):
+class GrokOcr(LanguageHintPlugin, OCRPlugin):
     """
     GrokOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: dead model id -> discovered replacement (process-wide).
     _model_upgrades = {}
 

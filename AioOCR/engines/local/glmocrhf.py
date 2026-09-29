@@ -34,16 +34,18 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 #: The model's documented prompt modes.
 _TASKS = {'text': 'Text Recognition:', 'formula': 'Formula Recognition:', 'table': 'Table Recognition:'}
 
 
-class GlmOcrHF(OCRPlugin):
+class GlmOcrHF(LanguageHintPlugin, OCRPlugin):
     """
     GlmOcrHF class.
     """
+    DEFAULT_MODEL = 'zai-org/GLM-OCR'
+    MODELS = ()
     #: (model_name, device) -> (model, processor); loading is slow and
     #: heavy, so share across instances.
     _models = {}

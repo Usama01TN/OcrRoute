@@ -38,7 +38,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'echo840/MonkeyOCR'
 _SUBFOLDER = 'Recognition'
@@ -52,10 +52,12 @@ _TASK_PROMPTS = {
 _PDF_SCALE = 2.0
 
 
-class MonkeyOcrHf(OCRPlugin):
+class MonkeyOcrHf(LanguageHintPlugin, OCRPlugin):
     """
     MonkeyOcrHf class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: (model, subfolder) -> (processor, model, device), loaded once.
     _engines = {}
 

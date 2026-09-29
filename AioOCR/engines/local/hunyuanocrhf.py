@@ -70,7 +70,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'tencent/HunyuanOCR'
 #: The official per-task prompts, verbatim.
@@ -159,10 +159,12 @@ _METHODS = ('generate', 'pipeline')
 _COORD_SPACES = ('auto', 'pixel', 'norm1', 'norm1000')
 
 
-class HunyuanOcrHf(OCRPlugin):
+class HunyuanOcrHf(LanguageHintPlugin, OCRPlugin):
     """
     HunyuanOcrHf class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: engine key -> (processor, model) or pipeline, loaded once.
     _engines = {}
 

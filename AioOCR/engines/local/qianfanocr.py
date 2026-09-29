@@ -51,7 +51,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'baidu/Qianfan-OCR'
 #: The card's official default prompt.
@@ -60,10 +60,12 @@ _PROMPT = 'Parse this document to Markdown.'
 _PDF_SCALE = 200.0 / 72.0
 
 
-class QianfanOcr(OCRPlugin):
+class QianfanOcr(LanguageHintPlugin, OCRPlugin):
     """
     QianfanOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: model name -> (processor, model, device), loaded once.
     _engines = {}
 

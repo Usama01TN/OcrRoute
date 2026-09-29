@@ -54,7 +54,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'dots-studio/dots.ocr'
 
@@ -90,10 +90,12 @@ _PDF_SCALE = 200.0 / 72.0
 _PAGE_GAP = 50.0
 
 
-class DotsOcr(OCRPlugin):
+class DotsOcr(LanguageHintPlugin, OCRPlugin):
     """
     DotsOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: model path -> (processor, model, device), loaded once.
     _engines = {}
 

@@ -77,6 +77,23 @@ class BaiduOcr(OCRPlugin):
     """
     BaiduOcr class.
     """
+    #: Baidu's language_type values, by canonical code ('auto' = auto_detect; CHN_ENG reads Chinese + English)
+    _BAIDU = dict(_LANG_MAP, **{
+        # Baidu's documented language_type values (general / accurate OCR); CHN_ENG reads Chinese + English
+        'auto': 'auto_detect', 'zh': 'CHN_ENG', 'en': 'ENG', 'ja': 'JAP', 'ko': 'KOR', 'fr': 'FRE', 'es': 'SPA',
+        'pt': 'POR', 'de': 'GER', 'it': 'ITA', 'ru': 'RUS', 'da': 'DAN', 'nl': 'DUT', 'ms': 'MAL', 'sv': 'SWE',
+        'id': 'IND', 'pl': 'POL', 'ro': 'ROM', 'tr': 'TUR', 'el': 'GRE', 'hu': 'HUN', 'th': 'THA', 'vi': 'VIE',
+        'ar': 'ARA', 'hi': 'HIN'})
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  ``'auto'`` (Baidu auto_detect) plus the languages Baidu's language_type accepts"""
+        return ['auto'] + sorted(c for c in cls._BAIDU if c != 'auto')
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return cls._BAIDU.get(code, code)
+
     #: (api, secretKey) -> (access_token, expiry_epoch).
     _tokens = {}
 
@@ -95,7 +112,7 @@ class BaiduOcr(OCRPlugin):
         if mode not in _MODES:
             raise OCRError('Unknown mode {!r}; choose from {}'.format(mode, ', '.join(_MODES)))
         self.__m_mode = mode
-        language = kwargs.pop('language', None)
+        language = kwargs.get('language', None)  # left in kwargs: the base class keeps it (any spelling)
         extras = {k: v for k, v in kwargs.items() if k not in _RESERVED}
         for key in extras:
             kwargs.pop(key)
@@ -105,9 +122,7 @@ class BaiduOcr(OCRPlugin):
         self.setEndpoint(_OCR_BASE + mode)
         payload = {}
         if language:
-            if isinstance(language, (list, tuple)):
-                language = language[0] if language else 'en'
-            payload['language_type'] = _LANG_MAP.get(str(language).lower(), str(language))
+            payload['language_type'] = self.getEngineLanguages()[0]  # canonical code -> Baidu language_type
         payload.update(extras)
         self.setPayload(payload)
 

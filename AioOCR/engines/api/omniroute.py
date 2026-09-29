@@ -47,7 +47,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_BASE = 'http://localhost:20128'
 _CHAT_PATH = '/v1/chat/completions'
@@ -72,10 +72,12 @@ _OCR_PROMPT = (
 )
 
 
-class OmniRouteOcr(OCRPlugin):
+class OmniRouteOcr(LanguageHintPlugin, OCRPlugin):
     """
     OmniRouteOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: dead/failed model -> discovered replacement (process-wide).
     _model_upgrades = {}
 

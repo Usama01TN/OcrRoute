@@ -41,6 +41,16 @@ class MistralOcr(OCRPlugin):
     """
     MistralOcr class.
     """
+    DEFAULT_MODEL = 'mistral-ocr-latest'
+    MODELS = ('mistral-ocr-latest', 'mistral-ocr-2512', 'mistral-ocr-3')
+
+    def _liveModels(self):
+        """Mistral's catalogue (client.models.list), kept to the OCR line."""
+        from mistralai import Mistral
+
+        client = Mistral(api_key=self.getApi())
+        page = client.models.list()
+        return [m.id for m in (getattr(page, 'data', None) or []) if 'ocr' in str(getattr(m, 'id', '')).lower()]
     #: api -> Mistral client (holds connection pools).
     _clients = {}
 

@@ -47,7 +47,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 #: Known resolution presets: (base_size, image_size, crop_mode).
 _PRESETS = {
@@ -122,10 +122,12 @@ class InMemoryInfer(object):
         return False
 
 
-class DeepSeekOcr(OCRPlugin):
+class DeepSeekOcr(LanguageHintPlugin, OCRPlugin):
     """
     DeepSeekOcr class.
     """
+    DEFAULT_MODEL = 'deepseek-ai/DeepSeek-OCR'
+    MODELS = ()
     #: (model_name, device) -> (model, tokenizer). Loading takes tens of
     #: seconds and several GB, so cache across instances.
     _models = {}

@@ -100,6 +100,8 @@ class NemotronOcr(OCRPlugin):
     """
     NemotronOcr class.
     """
+    DEFAULT_MODEL = 'nemotron-ocr-v2'
+    MODELS = tuple(_MODELS)
     #: hosted: model -> URL that answered. local: base -> full URL.
     _working_urls = {}
 

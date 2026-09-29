@@ -28,10 +28,31 @@ _LANG_MAP = {
 }
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
+#: PaddleOCR 3 language codes (paddleocr/_pipelines/ocr.py, 3.3.0)
+_PADDLE_CODES = ['ch', 'en', 'korean', 'japan', 'chinese_cht', 'te', 'ka', 'ta', 'af', 'az', 'bs', 'cs', 'cy', 'da', 'de', 'es', 'et', 'fr', 'ga', 'hr', 'hu', 'id', 'is', 'it', 'ku', 'la', 'lt', 'lv', 'mi', 'ms', 'mt', 'nl', 'no', 'oc', 'pi', 'pl', 'pt', 'ro', 'rs_latin', 'sk', 'sl', 'sq', 'sv', 'sw', 'tl', 'tr', 'uz', 'vi', 'fi', 'eu', 'gl', 'lb', 'rm', 'ca', 'qu', 'ar', 'fa', 'ug', 'ur', 'ps', 'ku', 'sd', 'bal', 'ru', 'rs_cyrillic', 'be', 'bg', 'uk', 'mn', 'abq', 'ady', 'kbd', 'ava', 'dar', 'inh', 'che', 'lbe', 'lez', 'tab', 'kk', 'ky', 'tg', 'mk', 'tt', 'cv', 'ba', 'mhr', 'mo', 'udm', 'kv', 'os', 'bua', 'xal', 'tyv', 'sah', 'kaa', 'hi', 'mr', 'ne', 'bh', 'mai', 'ang', 'bho', 'mah', 'sck', 'new', 'gom', 'sa', 'bgc']
+_PADDLE = _languages.fromEngineCodes(_PADDLE_CODES)
+
+
 class PaddleOcr(OCRPlugin):
     """
     PaddleOcr class.
     """
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  PaddleOCR's languages as canonical codes (one per request, no auto-detection)"""
+        return sorted(_PADDLE)
+
+    @classmethod
+    def toEngineLanguage(cls, code, engine=None):
+        return _PADDLE.get(code, code)
+
     #: Engine cache shared by all instances: model loading/downloading
     #: is expensive, so reuse one engine per (language, options) combo.
     _engines = {}
@@ -58,13 +79,10 @@ class PaddleOcr(OCRPlugin):
     # ------------------------------------------------------------------ #
     def _paddleLang(self):
         """
-        Return the PaddleOCR language code for the current language.
+        PaddleOCR takes one language per pipeline: the first requested one, in PaddleOCR's own code
+        ('zh' -> 'ch', 'ja' -> 'japan', 'zh-Hant' -> 'chinese_cht'...).
         """
-        langs = self.getLanguage()
-        if isinstance(langs, str):
-            langs = [langs]
-        first = langs[0] if langs else 'en'
-        return _LANG_MAP.get(first, first)
+        return self.getEngineLanguages()[0]
 
     def _engine(self):
         """

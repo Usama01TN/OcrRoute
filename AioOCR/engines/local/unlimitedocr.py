@@ -55,7 +55,7 @@ if dirname(dirname(__file__)) not in path:
 try:
     from .ocrplugin import OCRPlugin, OCRError
 except:
-    from engines.ocrplugin import OCRPlugin, OCRError
+    from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 
 _DEFAULT_MODEL = 'baidu/Unlimited-OCR'
 _PROMPT_SINGLE = '<image>document parsing.'
@@ -126,10 +126,12 @@ class InMemoryInfer(object):
         return False
 
 
-class UnlimitedOcr(OCRPlugin):
+class UnlimitedOcr(LanguageHintPlugin, OCRPlugin):
     """
     UnlimitedOcr class.
     """
+    DEFAULT_MODEL = _DEFAULT_MODEL
+    MODELS = ()
     #: model name -> (tokenizer, model, device), loaded once.
     _engines = {}
 

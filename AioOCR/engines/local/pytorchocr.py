@@ -71,6 +71,8 @@ class PytorchOcr(OCRPlugin):
     """
     PytorchOcr class.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en', 'zh']
     #: repo path -> (DetInfer, RecInfer) classes.
     _classes = {}
     #: model path -> loaded engine, built once per process.

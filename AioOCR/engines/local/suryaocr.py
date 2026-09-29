@@ -51,10 +51,22 @@ except:
 _TAG = compile(r'<[^>]+>')
 
 
+
+try:
+    from .. import languages as _languages
+except (ImportError, ValueError):
+    from engines import languages as _languages  # type: ignore[no-redef]
+
 class SuryaOcr(OCRPlugin):
     """
     SuryaOcr class.
     """
+
+    @classmethod
+    def getLanguages(cls, engine=None):
+        """:return: list[str]  ``['auto']``: Surya 0.15+ recognises 90+ languages and detects them itself"""
+        return [_languages.AUTO]
+
     #: Predictors are heavy (model loads / spawned inference server):
     #: build once, share across instances.
     _predictors = None
@@ -183,9 +195,7 @@ class SuryaOcr(OCRPlugin):
                 predictions = recognition([pil], det_predictor=detection)
             except TypeError:
                 # Oldest signature required a languages argument.
-                langs = self.getLanguage()
-                if isinstance(langs, str):
-                    langs = [langs]
+                langs = [c for c in _languages.normalize(self.getLanguage()) if c != _languages.AUTO] or ['en']
                 predictions = recognition([pil], [langs], detection)
         if not predictions:
             raise OCRError('Surya returned no prediction for this image.')

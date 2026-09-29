@@ -61,6 +61,8 @@ class NvidiaPaddleOcr(OCRPlugin):
     """
     NvidiaPaddleOcr class.
     """
+    #: the script(s) this engine's models read: it takes no language setting (see describeLanguages)
+    READS = ['en', 'zh']
 
     def __init__(self, *args, **kwargs):
         """
