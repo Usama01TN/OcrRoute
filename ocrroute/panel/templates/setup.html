@@ -1,0 +1,21 @@
+<!doctype html><html lang="{{ lang }}" dir="{{ 'rtl' if rtl else 'ltr' }}" data-bs-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>{{ _('Getting started') }} · OcrRoute</title>
+<script>(function(){try{var m=localStorage.getItem("ocrroute-theme")||"system";document.documentElement.setAttribute("data-bs-theme",m==="system"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):m);;window.addEventListener('DOMContentLoaded',function(){if(document.documentElement.getAttribute('data-bs-theme')==='dark'){document.querySelectorAll('link[data-favicon]').forEach(function(l){l.href='/panel/static/favicon-dark.svg';});}});}catch(e){}})();</script>
+<link rel="icon" type="image/svg+xml" href="/panel/static/favicon.svg" data-favicon>
+<link rel="icon" type="image/png" sizes="32x32" href="/panel/static/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/panel/static/apple-touch-icon.png">
+<link rel="manifest" href="/panel/static/site.webmanifest">
+<meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#070B12" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="/panel/static/vendor/bootstrap.min.css"><link rel="stylesheet" href="/panel/static/vendor/bootstrap-icons.min.css"><link rel="stylesheet" href="/panel/static/panel.css"></head>
+<body><div class="login-wrap"><div class="card login-card p-4 p-sm-5 fade-up">
+<a class="ocr-brand px-0 pt-0" href="/panel/setup"><span class="mark"><i class="bi bi-braces-asterisk"></i></span>OcrRoute</a>
+<h1 class="h5 fw-bold">{{ _('Getting started') }}</h1>
+<p class="text-muted mb-4">{{ _('No administrator exists yet. Create the first account.') }}</p>
+{% if error %}<div class="alert alert-danger py-2">{{ _(error) }}</div>{% endif %}
+<form method="post" action="/panel/setup" class="d-grid gap-3">
+<div><label class="form-label" for="u">{{ _('Username') }}</label><input class="form-control" id="u" name="username" required autofocus autocomplete="username"></div>
+<div><label class="form-label" for="p">{{ _('Password') }} <span class="text-muted">{{ _('(min 8)') }}</span></label><input class="form-control" id="p" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+<div><label class="form-label" for="c">{{ _('Confirm') }}</label><input class="form-control" id="c" name="confirm" type="password" required minlength="8" autocomplete="new-password"></div>
+<button class="btn btn-primary" type="submit">{{ _('Create administrator') }}</button>
+</form>
+<p class="small text-muted mt-4 mb-0">{% for code, name in languages %}<a href="/panel/lang/{{ code }}?next=/panel/setup" class="{% if code == lang %}fw-bold{% endif %}">{{ name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+</div></div></body></html>

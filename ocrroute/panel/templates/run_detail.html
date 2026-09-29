@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% block crumb %}<a href="/panel/runs">{{ _('Runs') }}</a><i class="bi bi-chevron-right small"></i><strong class="num">{{ run.id[-8:] }}</strong>{% endblock %}
+{% block actions %}<a class="btn btn-outline-secondary btn-sm" href="/panel/runs"><i class="bi bi-arrow-left"></i></a><button class="btn btn-outline-danger btn-sm" id="purge"><i class="bi bi-trash me-1"></i>{{ _('Purge') }}</button>{% endblock %}
+{% block content %}
+<div class="row g-3 stagger">
+<div class="col-12 col-xl-4"><div class="card h-100"><div class="card-header"><i class="bi bi-info-circle"></i>{{ _('Summary') }}</div><div class="card-body"><table class="table table-sm small mb-2">
+<tr><td class="text-muted">{{ _('status') }}</td><td><span class="status {{ run.status }}">{{ _(run.status) }}</span>{% if run.degraded %} degraded{% endif %}{% if run.cache_hit %} · cache hit{% endif %}</td></tr>
+<tr><td class="text-muted">{{ _('route') }}</td><td>{{ run.route_name }} · {{ run.strategy }}</td></tr>
+<tr><td class="text-muted">{{ _('engine') }}</td><td>{{ run.winning_engine or '-' }} {{ run.winning_provider }}</td></tr>
+<tr><td class="text-muted">{{ _('Input') }}</td><td>{{ run.input_kind }} · {{ run.mime }} · {{ run.bytes }} B · {{ run.page_count }} p · <span class="num">{{ run.image_sha256[:12] }}</span></td></tr>
+<tr><td class="text-muted">{{ _('time') }}</td><td class="num">{{ run.created_at }} → {{ run.finished_at }} · {{ run.duration_ms }} ms</td></tr>
+<tr><td class="text-muted">{{ _('Text') }}</td><td class="num">{{ run.chars }} chars · {{ run.lines }} lines · {{ run.words }} words · conf {{ run.mean_confidence }}</td></tr>
+<tr><td class="text-muted">{{ _('cost') }}</td><td class="num">{{ '%.4f'|format(run.cost_cents) }} ¢</td></tr>
+<tr><td class="text-muted">{{ _('client') }}</td><td class="small">{{ run.client_ip }} · key {{ run.api_key_id or '-' }} · {{ run.origin }}</td></tr>
+{% if run.error_code %}<tr><td class="text-muted">{{ _('error') }}</td><td><code>{{ run.error_code }}</code> {{ run.error_message }}</td></tr>{% endif %}
+</table>
+<div class="d-flex flex-wrap gap-1">{% for a in run.artifacts %}<a class="btn btn-outline-secondary btn-sm" href="/v1/runs/{{ run.id }}/artifacts/{{ a.kind }}"><i class="bi bi-download me-1"></i>{{ a.kind }}</a>{% endfor %}{% if run.result_json and run.status in ('succeeded','cached') %}{% for k in export_kinds if k != 'overlay_png' and k not in run.artifacts|map(attribute='kind') %}<a class="btn btn-outline-secondary btn-sm text-muted" href="/v1/runs/{{ run.id }}/artifacts/{{ k }}" title="{{ _('rendered on demand') }}">{{ k }}</a>{% endfor %}{% endif %}</div></div></div></div>
+<div class="col-12 col-xl-8"><div class="card h-100"><div class="card-header"><i class="bi bi-bar-chart-steps"></i>{{ _('Attempt timeline') }}</div><div class="card-body">
+{% set total = [run.attempts|map(attribute='duration_ms')|sum, 1]|max %}
+<div class="timeline d-grid gap-2">{% set ns = namespace(acc=0) %}{% for a in run.attempts %}
+<div class="d-flex align-items-center gap-2 flex-wrap"><span class="small" style="width:200px">{{ a.order_index }}. {{ a.engine_id }} <span class="text-muted">{{ a.provider_label }}</span></span>
+<div class="bar {{ a.status }} flex-fill" title="{{ a.duration_ms }} ms"><span style="{{ 'right' if rtl else 'left' }}:{{ (ns.acc / total * 100)|round(2) }}%;width:{{ ([a.duration_ms / total * 100, 0.8]|max)|round(2) }}%"></span></div>
+<span class="num small text-end" style="width:80px">{{ a.duration_ms }} ms</span><span class="status {{ a.status }}">{{ _(a.status) }}</span>{% if a.error_code %}<span class="small"><code>{{ a.error_code }}</code> {{ a.error_message[:90] }}</span>{% endif %}</div>
+{% set ns.acc = ns.acc + a.duration_ms %}{% else %}<span class="text-muted">-</span>{% endfor %}</div>
+{% if run.routing_json and run.routing_json.explain %}<h3 class="small text-muted text-uppercase fw-bold mt-3">{{ _('Explain') }}</h3><ul class="small mb-0">{% for x in run.routing_json.explain %}<li>{{ x }}</li>{% endfor %}</ul>{% endif %}</div></div></div>
+</div>
+<div class="card mt-3"><div class="card-body"><div class="tabs"><button class="active" data-tab="text">{{ _('Text') }}</button><button data-tab="json">JSON</button><button data-tab="routing">{{ _('Routing') }}</button><button data-tab="meta">{{ _('metadata') }}</button></div>
+<div data-pane="text"><textarea class="form-control font-monospace" readonly style="min-height:260px" dir="auto">{{ (run.result_json.ParsedText if run.result_json else '')|replace('\r\n','\n') }}</textarea></div>
+<div data-pane="json" hidden><pre>{{ run.result_json|tojson_pretty }}</pre></div>
+<div data-pane="routing" hidden><pre>{{ run.routing_json|tojson_pretty }}</pre></div>
+<div data-pane="meta" hidden><pre>{{ run.metadata_json|tojson_pretty }}</pre></div></div></div>
+{% endblock %}
+{% block scripts %}<script>
+document.addEventListener("DOMContentLoaded", () => { const {api, toast, $, confirmDo} = OcrRoute;
+document.querySelectorAll(".tabs [data-tab]").forEach(b => b.onclick = () => { b.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b)); document.querySelectorAll("[data-pane]").forEach(p => p.hidden = p.dataset.pane !== b.dataset.tab); });
+$("#purge").onclick = async () => { if (!confirmDo("Delete this run and its artifacts?")) return; try { await api("DELETE", "/v1/runs/{{ run.id }}"); location.href = "/panel/runs"; } catch (e) { toast(e.message, true); } }; });
+</script>{% endblock %}

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block tabs %}
+<div class="pilltabs fade-up">
+  <a class="{% if tab == 'api' %}active{% endif %}" href="?tab=api"><i class="bi bi-braces-asterisk"></i>API</a>
+  <a class="{% if tab == 'panel' %}active{% endif %}" href="?tab=panel"><i class="bi bi-layout-sidebar-inset"></i>{{ _('Control panel') }}</a>
+  <a class="{% if tab == 'docs' %}active{% endif %}" href="?tab=docs"><i class="bi bi-journal-code"></i>{{ _('Docs & SDK') }}</a>
+</div>
+{% endblock %}
+{% block content %}
+<div class="card fade-up"><div class="card-body p-4">
+{% if tab == 'api' %}
+  <h2 class="section-title">{{ _('API Endpoint') }}</h2>
+  <div class="ep-box">
+    <div class="sub mb-2">{{ _('Active endpoints') }}</div>
+    {% for a in ep.active %}
+    <div class="d-flex align-items-center gap-3 py-1 flex-wrap">
+      <span class="pill ok plain" style="min-width:110px"><span class="text-success">●</span> {{ a.label }}</span>
+      <span class="urlchip flex-grow-1"><code class="fs-6 bg-transparent p-0">{{ a.url }}</code></span>
+      <button class="copybig copy-url" data-url="{{ a.url }}" title="{{ _('Copy') }}"><i class="bi bi-copy"></i></button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="ep-row mt-3">
+    <span class="ico text-success"><i class="bi bi-terminal"></i></span>
+    <div class="flex-grow-1 min-w-0">
+      <span class="name">{{ _('Local server') }}</span> <span class="text-muted small">· {{ ep.server_id }}</span>
+      <span class="d-inline-flex flex-wrap gap-2 ms-2 align-middle">{% for u in ep.local %}<span class="urlchip">{{ u }} <button class="copy-url" data-url="{{ u }}" title="{{ _('Copy') }}"><i class="bi bi-copy"></i></button></span>{% endfor %}</span>
+    </div>
+    <div class="right"><span class="pill ok">{{ _('Running') }}</span><button class="btn btn-outline-secondary copy-url" data-url="{{ ep.active[0].url }}"><i class="bi bi-copy me-1"></i>{{ _('Copy') }}</button></div>
+  </div>
+
+  <div class="divider-label"><i class="bi bi-diagram-2"></i>{{ _('Tunnels') }}<span class="ms-auto text-muted" id="tunnels-count">{{ ep.tunnels_active }} / {{ ep.tunnels|length }} {{ _('active') }}</span></div>
+
+  <div class="ep-row">
+    <span class="ico" style="color:#60A5FA"><i class="bi bi-cloud"></i></span>
+    <div><div class="name">{{ _('Public URL') }}</div><div class="text-muted small">{{ _('Reverse proxy or domain in front of this gateway') }}</div></div>
+    <div class="right">
+      <input class="form-control form-control-sm" id="public-url" value="{{ ep.public_url }}" placeholder="https://ocr.example.com" style="min-width:220px">
+      {% if ep.public_url %}<span class="pill ok">{{ _('active') }}</span>{% endif %}
+      <button class="btn btn-sm btn-grad" id="save-public"><i class="bi bi-cloud-check me-1"></i>{{ _('Save') }}</button>
+    </div>
+  </div>
+
+  {% set icons = {'cloudflare': ('bi-cloud-fill', '#F97316'), 'tailscale': ('bi-globe2', '#818CF8'), 'ngrok': ('bi-globe-americas', '#C084FC')} %}
+  {% for t in ep.tunnels %}
+  <div class="ep-row" data-tunnel="{{ t.name }}">
+    <span class="ico" style="color:{{ icons[t.name][1] }}"><i class="bi {{ icons[t.name][0] }}"></i></span>
+    <div class="min-w-0"><div class="name">{{ t.title }}</div>{% if t.url %}<div class="urlchip small">{{ t.url }}/v1 <button class="copy-url" data-url="{{ t.url }}/v1"><i class="bi bi-copy"></i></button></div>{% elif t.error %}<div class="text-danger small">{{ t.error }}</div>{% endif %}</div>
+    <div class="right">
+      {% if t.running %}<span class="pill ok">{{ _('active') }}</span><button class="btn btn-sm btn-soft-danger t-disable" data-name="{{ t.name }}"><i class="bi bi-cloud-slash me-1"></i>{{ _('Disable') }}</button>
+      {% elif not t.installed %}<span class="pill plain">{{ _('Not installed') }}</span><button class="btn btn-sm btn-grad t-install" data-name="{{ t.name }}" data-cmd="{{ t.install_command }}" data-home="{{ t.homepage }}"><i class="bi bi-cloud-download me-1"></i>{{ _('Install & enable') }}</button>
+      {% elif not t.authenticated %}<span class="pill warn plain">{{ _('Needs auth') }}</span><button class="btn btn-sm btn-grad t-auth" data-name="{{ t.name }}" data-title="{{ t.title }}"><i class="bi bi-key me-1"></i>{{ _('Enable tunnel') }}</button>
+      {% else %}<button class="btn btn-sm btn-grad t-enable" data-name="{{ t.name }}"><i class="bi bi-cloud-arrow-up me-1"></i>{{ _('Enable tunnel') }}</button>{% endif %}
+      <button class="iconbtn t-more" data-bs-toggle="collapse" data-bs-target="#more-{{ t.name }}" aria-expanded="false"><i class="bi bi-chevron-down"></i></button>
+    </div>
+    <div class="collapse w-100" id="more-{{ t.name }}"><div class="mt-2 small text-muted">
+      <div>binary: <code>{{ t.binary }}</code> · <a href="{{ t.homepage }}" target="_blank" rel="noopener">{{ t.homepage }}</a></div>
+      {% if t.install_command %}<div class="mt-1">{{ ep.platform }}: <code class="user-select-all">{{ t.install_command }}</code></div>{% endif %}
+      {% if t.log %}<pre class="mt-2">{{ t.log|join('\n') }}</pre>{% endif %}
+    </div></div>
+  </div>
+  {% endfor %}
+
+  <div class="ep-row mt-2 align-items-start">
+    <div class="flex-grow-1"><div class="name">{{ _('Custom OCR prompt') }}</div><div class="text-muted small">{{ _('Inject a custom prompt into every VLM engine request') }}</div>
+      <textarea class="form-control mt-2 {% if not ep.custom_prompt_enabled %}d-none{% endif %}" id="custom-prompt" rows="3" placeholder="{{ _('Return only the visible text, preserving line breaks.') }}">{{ ep.custom_prompt }}</textarea></div>
+    <div class="right"><div class="form-check form-switch m-0"><input class="form-check-input" type="checkbox" role="switch" id="prompt-toggle" {% if ep.custom_prompt_enabled %}checked{% endif %} aria-label="{{ _('Custom OCR prompt') }}"></div><button class="btn btn-sm btn-outline-secondary {% if not ep.custom_prompt_enabled %}d-none{% endif %}" id="save-prompt">{{ _('Save') }}</button></div>
+  </div>
+
+{% elif tab == 'panel' %}
+  <h2 class="section-title">{{ _('Control panel') }}</h2>
+  <div class="ep-box"><div class="sub mb-2">{{ _('Active endpoints') }}</div>
+    <div class="d-flex align-items-center gap-3 py-1 flex-wrap"><span class="pill ok plain"><span class="text-success">●</span> {{ _('Control panel') }}</span><span class="urlchip flex-grow-1"><code class="fs-6 bg-transparent p-0">{{ ep.panel_url }}</code></span><button class="copybig copy-url" data-url="{{ ep.panel_url }}"><i class="bi bi-copy"></i></button></div>
+    {% for u in ep.local %}<div class="d-flex align-items-center gap-3 py-1 flex-wrap"><span class="pill plain" style="min-width:110px">LAN</span><span class="urlchip flex-grow-1"><code class="fs-6 bg-transparent p-0">{{ u|replace('/v1', '/panel/') }}</code></span><button class="copybig copy-url" data-url="{{ u|replace('/v1', '/panel/') }}"><i class="bi bi-copy"></i></button></div>{% endfor %}
+  </div>
+  <p class="text-muted small mt-3">{{ engines_available }}/{{ engines_total }} {{ _('available') }} · {{ _('Panel users') }}: {{ keys|length }} {{ _('API keys')|lower }}</p>
+{% else %}
+  <h2 class="section-title">{{ _('Docs & SDK') }}</h2>
+  <div class="ep-box mb-3"><div class="sub mb-2">OpenAPI</div>
+    <div class="d-flex align-items-center gap-3 py-1 flex-wrap"><span class="pill ok plain"><span class="text-success">●</span> Swagger</span><span class="urlchip flex-grow-1"><code class="fs-6 bg-transparent p-0">{{ ep.docs_url }}</code></span><button class="copybig copy-url" data-url="{{ ep.docs_url }}"><i class="bi bi-copy"></i></button></div>
+    <div class="d-flex align-items-center gap-3 py-1 flex-wrap"><span class="pill plain">JSON</span><span class="urlchip flex-grow-1"><code class="fs-6 bg-transparent p-0">{{ ep.docs_url|replace('/docs', '/openapi.json') }}</code></span><button class="copybig copy-url" data-url="{{ ep.docs_url|replace('/docs', '/openapi.json') }}"><i class="bi bi-copy"></i></button></div></div>
+  <div class="tabs"><button class="active" data-code="curl">cURL</button><button data-code="py">Python</button><button data-code="js">JavaScript</button></div>
+  <pre id="sdk-code"></pre>
+{% endif %}
+</div></div>
+<dialog id="auth-dlg"><h2 id="auth-title">{{ _('Needs auth') }}</h2><p class="small text-muted" id="auth-intro"></p><div class="field"><label id="auth-label">{{ _('Token') }}</label><input id="auth-token" type="password" autocomplete="off" placeholder="…"></div><p class="small" id="auth-link"></p><pre id="auth-out" class="d-none"></pre><div class="d-flex gap-2 mt-3"><button class="btn btn-grad" id="auth-run"><i class="bi bi-cloud-arrow-up me-1"></i>{{ _('Enable tunnel') }}</button><button class="btn btn-outline-secondary" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button></div></dialog>
+<dialog id="install-dlg"><h2>{{ _('Install & enable') }}</h2><p class="small text-muted" id="install-intro"></p><pre id="install-cmd"></pre><pre id="install-out" class="mt-2 d-none"></pre><div class="d-flex gap-2 mt-3"><button class="btn btn-grad" id="install-run"><i class="bi bi-terminal me-1"></i>{{ _('Run on server') }}</button><a class="btn btn-outline-secondary" id="install-home" target="_blank" rel="noopener">{{ _('Download page') }}</a><button class="btn btn-outline-secondary" onclick="this.closest('dialog').close()">{{ _('Cancel') }}</button></div></dialog>
+{% endblock %}
+{% block scripts %}<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const {api, toast, $, confirmDo} = OcrRoute;
+  document.querySelectorAll(".copy-url").forEach(b => b.onclick = () => navigator.clipboard.writeText(b.dataset.url).then(() => toast("Copied")));
+  const base = location.origin;
+  const snippets = {
+    curl: `curl -X POST ${base}/v1/ocr \\\n  -H "Authorization: Bearer $OCRROUTE_KEY" \\\n  -F file=@document.png \\\n  -F 'json={"language":"en","output":["json","text"]}'`,
+    py: `import requests\n\nr = requests.post("${base}/v1/ocr",\n    headers={"Authorization": "Bearer " + OCRROUTE_KEY},\n    files={"file": open("document.png", "rb")},\n    data={"json": '{"language": "en"}'}, timeout=120)\nprint(r.json()["result"]["ParsedText"])`,
+    js: `const form = new FormData();\nform.append("file", fileInput.files[0]);\nform.append("json", JSON.stringify({language: "en"}));\nconst r = await fetch("${base}/v1/ocr", {method: "POST", headers: {Authorization: "Bearer " + OCRROUTE_KEY}, body: form});\nconst envelope = await r.json();\nconsole.log(envelope.result.ParsedText);`};
+  const code = $("#sdk-code"); if (code) { code.textContent = snippets.curl; document.querySelectorAll("[data-code]").forEach(b => b.onclick = () => { b.parentElement.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b)); code.textContent = snippets[b.dataset.code]; }); }
+  const busy = (b, on) => { b.disabled = on; if (on) b.dataset.html = b.innerHTML, b.innerHTML = '<i class="bi bi-arrow-repeat spin me-1"></i>…'; else b.innerHTML = b.dataset.html; };
+  document.querySelectorAll(".t-enable").forEach(b => b.onclick = async () => { busy(b, true); try { const r = await api("POST", `/v1/endpoints/tunnels/${b.dataset.name}/enable`); toast(r.url ? r.url : "Tunnel started (URL pending)"); location.reload(); } catch (e) { toast(e.message, true); busy(b, false); } });
+  document.querySelectorAll(".t-disable").forEach(b => b.onclick = async () => { busy(b, true); try { await api("POST", `/v1/endpoints/tunnels/${b.dataset.name}/disable`); location.reload(); } catch (e) { toast(e.message, true); busy(b, false); } });
+  const openAuth = (name, title) => { $("#auth-title").textContent = title; $("#auth-intro").textContent = name === "ngrok" ? "Paste your ngrok authtoken. It is passed to `ngrok config add-authtoken` on the server and the tunnel starts right after." : "Tailscale needs this machine to be logged in. Leave the key empty to get a browser login link, or paste a tailnet auth key."; $("#auth-label").textContent = name === "ngrok" ? "ngrok authtoken" : "Tailscale auth key (optional)"; $("#auth-link").innerHTML = name === "ngrok" ? '<a href="https://dashboard.ngrok.com/get-started/your-authtoken" target="_blank" rel="noopener">Get your authtoken</a>' : ""; $("#auth-out").classList.add("d-none"); $("#auth-token").value = ""; const run = $("#auth-run"); run.onclick = async () => { busy(run, true); try { const r = await api("POST", `/v1/endpoints/tunnels/${name}/auth`, {token: $("#auth-token").value.trim()}); if (r.login_url) { $("#auth-link").innerHTML = `Open <a href="${r.login_url}" target="_blank" rel="noopener">${r.login_url}</a> to finish login, then click again.`; } $("#auth-out").textContent = r.output || ""; $("#auth-out").classList.toggle("d-none", !r.output); toast(r.url ? r.url : (r.ok ? "Authenticated" : "Authentication failed"), !r.ok); if (r.url) setTimeout(() => location.reload(), 1200); } catch (e) { toast(e.message, true); } finally { busy(run, false); } }; $("#auth-dlg").showModal(); };
+  document.querySelectorAll(".t-auth").forEach(b => b.onclick = () => openAuth(b.dataset.name, b.dataset.title));
+  document.querySelectorAll(".t-install").forEach(b => b.onclick = async () => { busy(b, true); try { const r = await api("POST", `/v1/endpoints/tunnels/${b.dataset.name}/install`); if (r.needs_auth) { toast("Installed. Authentication needed."); openAuth(b.dataset.name, r.status.title); setTimeout(() => location.reload(), 60000); return; } if (r.url) toast(r.url); else if (r.ok && r.installed) toast("Installed and started (URL pending)"); else { $("#install-intro").textContent = r.command ? `Command: ${r.command}` : ""; $("#install-cmd").textContent = r.output || "install failed"; $("#install-out").classList.add("d-none"); $("#install-run").classList.add("d-none"); $("#install-home").href = b.dataset.home; $("#install-dlg").showModal(); return; } setTimeout(() => location.reload(), 1200); } catch (e) { toast(e.message, true); } finally { busy(b, false); } });
+  const sp = $("#save-public"); if (sp) sp.onclick = async () => { try { await api("PATCH", "/v1/endpoints", {public_base_url: $("#public-url").value.trim()}); toast("Saved"); location.reload(); } catch (e) { toast(e.message, true); } };
+  const pt = $("#prompt-toggle"); if (pt) { pt.onchange = async () => { $("#custom-prompt").classList.toggle("d-none", !pt.checked); $("#save-prompt").classList.toggle("d-none", !pt.checked); try { await api("PATCH", "/v1/endpoints", {custom_prompt_enabled: pt.checked}); toast("Saved"); } catch (e) { toast(e.message, true); } }; $("#save-prompt").onclick = async () => { try { await api("PATCH", "/v1/endpoints", {custom_prompt: $("#custom-prompt").value}); toast("Saved"); } catch (e) { toast(e.message, true); } }; }
+});
+</script>{% endblock %}
