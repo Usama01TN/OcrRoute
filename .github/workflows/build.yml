@@ -18,10 +18,8 @@ on:
         description: "With publish: release whatever built successfully, as a pre-release (default: all builds must pass)"
         type: boolean
         default: false
-
 permissions:
   contents: write
-
 jobs:
   build:
     name: ${{ matrix.platform.label }} (${{ matrix.edition }})
@@ -224,7 +222,6 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "new=${NEW}" >> "$GITHUB_OUTPUT"
           echo "code version ${VERSION}: tag ${TAG} $( [ "${NEW}" = true ] && echo 'does not exist yet' || echo 'already exists')"
-
   release:
     name: Publish release
     # Runs for a pushed version tag (git tag v0.7.1 && git push origin v0.7.1), or for "Run workflow" with
