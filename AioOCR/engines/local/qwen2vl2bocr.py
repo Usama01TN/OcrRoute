@@ -48,8 +48,8 @@ try:
     from .qwenvlocrlib import QwenVlOcr
     from .ocrplugin import OCRError
 except:
-    from qwenvlocrlib import QwenVlOcr
     from engines.ocrplugin import OCRError
+    from qwenvlocrlib import QwenVlOcr
 
 #: The fine-tune this plugin exists for.
 MODEL = 'JackChew/Qwen2-VL-2B-OCR'

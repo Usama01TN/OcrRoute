@@ -32,7 +32,7 @@ if dirname(dirname(__file__)) not in path:
     path.append(dirname(dirname(__file__)))
 
 try:
-    from .ocrplugin import OCRPlugin, OCRError
+    from .ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 except:
     from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 

@@ -94,16 +94,20 @@ class OcrSpace(OCRPlugin):
         :param api: API key string (``api`` also accepted; pass several via apiList for automatic rotation).
         :param language: document language ('eng', 'fre', ...).
         :param engine: OCR.Space engine number (default 2).
+        :param maxBytes: (int) largest upload the plan allows, default 1000000 (the free plan's 1 MB); larger images are
+                         re-encoded as JPEG and, if still too big, downscaled step by step. 0 disables it.
         :param kwargs: extra payload settings forwarded to the API (isTable, detectOrientation, scale, ...).
         """
         api = kwargs.pop('api', environ.get('OCR_SPACE_API', 'helloworld'))
         language = kwargs.pop('language', None)  # any spelling ('ar', 'ara', 'Arabic'...): translated per request
         engine = kwargs.pop('engine', 2)
+        maxBytes = int(kwargs.pop('maxBytes', 1000000) or 0)  # the free plan allows 1 MB per file; 0 = no limit
         # API payload extras = whatever is left that is not reserved.
         extras = {k: v for k, v in kwargs.items() if k not in _RESERVED}
         for key in extras:
             kwargs.pop(key)
         super(OcrSpace, self).__init__(*args, **kwargs)
+        self.__m_maxBytes = maxBytes
         self.setOnline(True)
         if not self.getApiList():
             self.setApiList([api])
@@ -161,10 +165,16 @@ class OcrSpace(OCRPlugin):
             response = post(self.getEndpoint(), **kwargs)
         elif kind == 'path':
             with open(source, 'rb') as handle:
-                response = post(self.getEndpoint(), files={'file': handle}, **kwargs)
+                head = handle.read(16)
+            if self.sniffFormat(head) in ('PNG', 'JPEG', 'PDF'):
+                with open(source, 'rb') as handle:
+                    response = post(self.getEndpoint(), files={'file': handle}, **kwargs)
+            else:  # GIF, WebP, BMP, TIFF...: engine 3 returns no text for them; send a PNG instead
+                buffer = BytesIO(self._fitBytes(self.imageBytes()))
+                response = post(self.getEndpoint(), files={'file': ('image.png', buffer, 'image/png')}, **kwargs)
         elif kind in ('pil', 'bytes', 'buffer'):
-            buffer = BytesIO(self.imageBytes())
-            response = post(self.getEndpoint(), files={'file': ('image.png', buffer, 'image/png')}, **kwargs)
+            buffer = BytesIO(self._fitBytes(self.imageBytes()))
+            response = post(self.getEndpoint(), files={'file': ('image.png' if self.imageMime(buffer.getvalue()) == 'image/png' else 'image.jpg', buffer, self.imageMime(buffer.getvalue()))}, **kwargs)
         elif isinstance(source, str):
             # Only send string sources that really look like base64;
             # anything else is almost certainly a mistyped/missing path.
@@ -186,6 +196,32 @@ class OcrSpace(OCRPlugin):
             raise OCRError('HTTP {} from OCR.Space: {}'.format(
                 response.status_code, (response.text or '')[:300].strip()))
         return response.json()
+
+    def _fitBytes(self, data):
+        """
+        :return: bytes  ``data`` shrunk under ``maxBytes`` when needed: JPEG (quality 88, then 75), then 0.8x smaller
+                 steps; the original when the limit is 0 or already met, or when it is a PDF
+        """
+        limit = self.__m_maxBytes
+        if not limit or len(data) <= limit or self.sniffFormat(data) == 'PDF':
+            return data
+        from PIL import Image
+
+        with Image.open(BytesIO(data)) as pic:
+            pic.load()
+            pic = pic.convert('RGB')
+            buffer = BytesIO()
+            for _step in range(8):
+                for quality in (88, 75):
+                    buffer = BytesIO()
+                    pic.save(buffer, format='JPEG', quality=quality, optimize=True)
+                    if len(buffer.getvalue()) <= limit:
+                        return buffer.getvalue()
+                w, h = pic.size
+                if w * h < 200 * 200:
+                    break
+                pic = pic.resize((max(1, int(w * 0.8)), max(1, int(h * 0.8))), Image.LANCZOS)
+        return buffer.getvalue()  # the smallest reached: the API says if it is still too large
 
     def _run(self, image, *args, **kwargs):
         """

@@ -45,8 +45,8 @@ try:
     from .monkeyocrhf import MonkeyOcrHf
     from .ocrplugin import OCRError
 except:
-    from monkeyocrhf import MonkeyOcrHf
     from engines.ocrplugin import OCRError
+    from monkeyocrhf import MonkeyOcrHf
 
 _DEFAULT_MODEL = 'echo840/MonkeyOCR-pro-1.2B'
 #: Repo layouts to try, in order: Recognition subfolder, then flat.

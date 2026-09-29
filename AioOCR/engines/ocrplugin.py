@@ -324,27 +324,95 @@ class OCRPlugin(object):
                 return 'path'
         return 'unknown'
 
-    def imageBytes(self):
+    @staticmethod
+    def sniffFormat(data):
         """
-        Return the image as raw PNG/original bytes whatever the source
-        (path, PIL image, BytesIO, bytes). URLs are not downloaded here;
-        online engines can pass them through instead.
+        :param data: bytes
+        :return: str  'PNG', 'JPEG', 'GIF', 'WEBP', 'BMP', 'TIFF', 'PDF' or '' (unknown), from the file signature
+        """
+        head = bytes(data[:16]) if data else b''
+        if head.startswith(b'\x89PNG'):
+            return 'PNG'
+        if head.startswith(b'\xff\xd8\xff'):
+            return 'JPEG'
+        if head.startswith(b'GIF8'):
+            return 'GIF'
+        if head.startswith(b'RIFF') and head[8:12] == b'WEBP':
+            return 'WEBP'
+        if head.startswith(b'BM'):
+            return 'BMP'
+        if head.startswith((b'II*\x00', b'MM\x00*')):
+            return 'TIFF'
+        if head.startswith(b'%PDF'):
+            return 'PDF'
+        return ''
+
+    def imageBytes(self, fmt=None):
+        """
+        The image as bytes in the format an API is told it gets (``'PNG'`` by default, or ``'JPEG'``), whatever the
+        source (path, PIL image, BytesIO, bytes). Bytes already in that format pass through untouched; anything else
+        (GIF, WebP, BMP, TIFF, a JPEG when PNG is wanted...) is transcoded with Pillow, so a request never carries
+        data whose signature contradicts its declared type: OCR.Space engine 3 returned no text for a GIF labelled
+        PNG, and strict APIs (Claude, Gemini) reject the mismatch. PDF bytes are returned as they are (engines that
+        take PDFs handle them; the others get pages rendered by the caller). URLs are not downloaded here.
+
+        :param fmt: str | None  'PNG' or 'JPEG' to force one; None keeps PNG and JPEG as they are and turns every
+                    other format into PNG (label the request with ``imageMime()``)
         :return: bytes
         """
         kind = self.imageKind()
         img = self.getImage()
-        if kind == 'bytes':
-            return bytes(img)
-        if kind == 'buffer':
-            return img.getvalue()
         if kind == 'pil':
-            buffer = BytesIO()
-            img.save(buffer, format='PNG')
-            return buffer.getvalue()
-        if kind == 'path':
+            return self._encode(img, fmt or 'PNG')
+        if kind == 'bytes':
+            raw = bytes(img)
+        elif kind == 'buffer':
+            raw = img.getvalue()
+        elif kind == 'path':
             with open(img, 'rb') as handle:
-                return handle.read()
-        raise OCRError('Cannot convert image source ({}) to bytes.'.format(kind))
+                raw = handle.read()
+        else:
+            raise OCRError('Cannot convert image source ({}) to bytes.'.format(kind))
+        have = self.sniffFormat(raw)
+        if have == fmt or have == 'PDF' or (have == '' and not raw) or (fmt is None and have in ('PNG', 'JPEG')):
+            return raw
+        fmt = fmt or 'PNG'
+        try:
+            from PIL import Image
+
+            with Image.open(BytesIO(raw)) as pic:
+                pic.load()  # the first frame of an animated GIF / multi-page TIFF
+                return self._encode(pic, fmt)
+        except Exception as exc:  # noqa: BLE001 - not an image Pillow knows: send the bytes as they are
+            if have:
+                raise OCRError('Cannot convert {} input to {}: {}'.format(have, fmt, exc))
+            return raw
+
+    def imageMime(self, data=None):
+        """
+        :param data: bytes | None  the bytes about to be sent (``imageBytes()`` when None)
+        :return: str  'image/jpeg' for JPEG bytes, 'application/pdf' for a PDF, else 'image/png'
+        """
+        have = self.sniffFormat(data if data is not None else self.imageBytes())
+        return {'JPEG': 'image/jpeg', 'PDF': 'application/pdf'}.get(have, 'image/png')
+
+    def imageDataUrl(self, data=None):
+        """:return: str  ``data:<mime>;base64,...`` for the bytes about to be sent"""
+        from base64 import b64encode
+
+        data = self.imageBytes() if data is None else data
+        return 'data:{};base64,{}'.format(self.imageMime(data), b64encode(data).decode('ascii'))
+
+    @staticmethod
+    def _encode(pic, fmt):
+        buffer = BytesIO()
+        if fmt.upper() == 'JPEG':
+            pic = pic.convert('RGB') if pic.mode not in ('RGB', 'L') else pic
+            pic.save(buffer, format='JPEG', quality=92)
+        else:
+            pic = pic.convert('RGBA') if pic.mode in ('P', 'PA', 'LA') else pic  # palettes (GIF) become real pixels
+            pic.save(buffer, format='PNG')
+        return buffer.getvalue()
 
     # ------------------------------------------------------------------ #
     # Getters / setters (backward compatible)                            #

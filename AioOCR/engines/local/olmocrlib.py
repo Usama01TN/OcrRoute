@@ -55,7 +55,7 @@ except ImportError:
     _get_anchor_text = None
 
 try:
-    from .ocrplugin import OCRPlugin, OCRError
+    from .ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 except:
     from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError
 

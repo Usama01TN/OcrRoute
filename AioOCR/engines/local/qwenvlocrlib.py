@@ -48,7 +48,7 @@ if dirname(dirname(__file__)) not in path:
     path.append(dirname(dirname(__file__)))
 
 try:
-    from .ocrplugin import OCRPlugin, OCRError, is_url
+    from .ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError, is_url
 except:
     from engines.ocrplugin import LanguageHintPlugin, OCRPlugin, OCRError, is_url
 
