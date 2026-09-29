@@ -23,12 +23,12 @@ def _gateway(seen):
             self.wfile.write(data)
 
         def do_GET(self):
-            self._send(200, {'data': [{'id': 'auto'}]}) if self.path == '/v1/models' else self._send(404, {})
+            self._send(200, {'data': [{'id': 'auto'}, {'id': 'gemini/gemini-2.5-flash'}]}) if self.path == '/v1/models' else self._send(404, {})
 
         def do_POST(self):
             body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             seen.append({'model': body.get('model'), 'auth': self.headers.get('Authorization', ''),
-                         'image': 'image_url' in json.dumps(body)})
+                         'image': 'image_url' in json.dumps(body), 'text': json.dumps(body)})
             if self.headers.get('Authorization') != 'Bearer sk-omni-test':
                 return self._send(401, {'error': {'message': 'invalid api key'}})
             lines = [{'text': 'OcrRoute Invoice 2026', 'box_2d': [100, 50, 300, 950]}]
@@ -67,7 +67,24 @@ def test_omniroute_ocr_end_to_end(client, admin_headers):
         assert r['result']['ParsedText'].strip() == 'OcrRoute Invoice 2026'
         word = r['result']['TextOverlay']['Lines'][0]['Words'][0]
         assert (word['Left'], word['Top'], round(word['Width']), word['Height']) == (40.0, 20.0, 720, 40.0)  # 0-1000 grid -> px
-        assert seen[-1] == {'model': 'auto', 'auth': 'Bearer sk-omni-test', 'image': True}
+        assert {k: seen[-1][k] for k in ('model', 'auth', 'image')} == {'model': 'auto', 'auth': 'Bearer sk-omni-test', 'image': True}
+        # the language hint reaches the model: several languages in one request (a vision-language engine)
+        r = client.post('/v1/ocr', files={'file': ('t.png', buf.getvalue())},
+                        data={'json': json.dumps({'engine': 'OmniRouteOcr', 'cache': False, 'language': ['fr', 'ar']})},
+                        headers=admin_headers).json()
+        assert r['status'] == 'succeeded', r.get('error_message')
+        assert 'The text is in French and Arabic' in seen[-1]['text']
+        # live model list through this provider's credential (the gateway serves /v1/models)
+        known = client.get('/v1/engines/OmniRouteOcr/models', headers=admin_headers).json()
+        assert known['has_model'] and known['default'] == 'auto' and known['source'] == 'known'
+        live = client.get('/v1/engines/OmniRouteOcr/models?live=1&provider_id={}'.format(pid), headers=admin_headers).json()
+        assert live['source'] == 'live', live
+        assert 'gemini/gemini-2.5-flash' in [m['id'] for m in live['models']]
+        # a chosen model reaches the gateway
+        r = client.post('/v1/ocr', files={'file': ('t.png', buf.getvalue())},
+                        data={'json': json.dumps({'engine': 'OmniRouteOcr', 'cache': False, 'options': {'model': 'gemini/gemini-2.5-flash'}})},
+                        headers=admin_headers).json()
+        assert r['status'] == 'succeeded' and seen[-1]['model'] == 'gemini/gemini-2.5-flash'
         sim = client.post('/v1/routes/simulate', json={'route': 'auto/private'}, headers=admin_headers).json()
         assert not any(c.get('engine') == 'OmniRouteOcr' for c in sim.get('candidates', []))  # images leave the machine
     finally:

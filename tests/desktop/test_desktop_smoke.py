@@ -171,3 +171,93 @@ def test_worker_results_survive_garbage_collection(qapp):
     QTimer.singleShot(100, loop.quit)
     loop.exec_()
     assert liveCount() == 0
+
+
+def test_scan_page_language_and_variant_pickers(qapp, ctx):
+    """The language is a dropdown filled from the engine; OCR.Space shows its variants and they change the list."""
+    import socket
+    import threading
+    import time
+
+    import requests
+    import uvicorn
+    from ManyQt.QtCore import QCoreApplication, QThreadPool
+
+    from ocrroute.api.app import createApp
+    from ocrroute.crypto import hashApiKey, newApiKey
+    from ocrroute.db.models import ApiKey
+    from ocrroute.db.session import sessionScope
+    from ocrroute.desktop.client import OcrRouteClient
+    from ocrroute.desktop.pages.scan import ScanPage
+    from ocrroute.desktop.state import AppState
+
+    raw = newApiKey()
+    with sessionScope() as s:
+        s.add(ApiKey(name='lang', key_hash=hashApiKey(raw), key_prefix=raw[:10], scopes=['admin']))
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(createApp(include_panel=False), host='127.0.0.1', port=port, log_level='error'))
+    threading.Thread(target=server.run, daemon=True).start()
+    base = 'http://127.0.0.1:{}'.format(port)
+    for _ in range(100):
+        try:
+            if requests.get(base + '/v1/health', timeout=0.5).ok:
+                break
+        except Exception:  # noqa: BLE001
+            time.sleep(0.1)
+
+    def pump(cond, timeout=20.0):
+        end = time.time() + timeout
+        while time.time() < end:
+            QCoreApplication.processEvents()
+            if cond():
+                return
+            time.sleep(0.02)
+        raise AssertionError('condition not met')
+
+    try:
+        QThreadPool.globalInstance().setMaxThreadCount(8)
+        state = AppState()
+        page = ScanPage(state)
+        state.client = OcrRouteClient(base, raw)
+        state.base_url = base
+        page.refresh()
+        pump(lambda: page.target.findData('engine:OcrSpace') >= 0)
+        page.target.setCurrentIndex(page.target.findData('engine:OcrSpace'))
+        pump(lambda: page._variantShown and page.lang.count() == 25)
+        assert page.lang.currentData() == 'auto'  # engine 2 (default): auto + 24 languages
+        page.variant.setCurrentIndex(page.variant.findData(1))
+        page._loadLanguages(True)
+        pump(lambda: page.lang.count() == 24 and page.lang.findData('auto') < 0)
+        assert page.lang.currentData() == 'en'  # engine 1 cannot detect the language: English by default
+        page.lang.setCurrentIndex(page.lang.findData('ar'))
+        p = page._payload()
+        assert p['language'] == 'ar' and p['engine'] == 'OcrSpace' and p['options']['engine'] == 1
+        page.target.setCurrentIndex(page.target.findData('engine:ClaudeOcr'))  # a VLM: auto + every language as a hint
+        pump(lambda: not page._variantShown and page.lang.isEnabled() and page.lang.count() > 100)
+        assert page.lang.currentData() == 'auto' and 'engine' not in page._payload().get('options', {})
+        # model picker: Claude's known models, a typed model in the payload; hidden for OCR.Space
+        pump(lambda: page.modelRow.isVisibleTo(page) and page.model.count() >= 2)
+        assert page.model.itemData(0) == 'claude-sonnet-4-6' and page.modelValue() == ''
+        page.model.setEditText('claude-opus-4-1')
+        assert page._payload()['options']['model'] == 'claude-opus-4-1'
+        page.target.setCurrentIndex(page.target.findData('engine:OcrSpace'))
+        page._loadLanguages(False)
+        pump(lambda: not page.modelRow.isVisibleTo(page))
+        page.target.setCurrentIndex(page.target.findData('engine:TrOcr'))  # a fixed script: no setting, says what it reads
+        pump(lambda: not page.lang.isEnabled())
+        assert page.lang.currentData() == 'auto' and 'English' in page.lang.itemText(0)
+        page.target.setCurrentIndex(0)  # the default route: every language, auto first
+        pump(lambda: page.lang.isEnabled() and page.lang.count() > 100)
+        assert page.lang.currentData() == 'auto'
+        # several languages on the default route: add French and Arabic through the adder
+        pump(lambda: page._multi is not None and page.extraAdd.count() > 100)
+        for code in ('fr', 'ar'):
+            page.extraAdd.setCurrentIndex(page.extraAdd.findData(code))
+            page._addExtraLanguage()
+        assert page.languages() == ['fr', 'ar'] and page._payload()['language'] == ['fr', 'ar']
+        page._removeExtraLanguage('fr')
+        assert page.languages() == 'ar'
+    finally:
+        server.should_exit = True

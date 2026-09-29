@@ -79,3 +79,27 @@ Auto routes use OmniRoute only once it has a credential, so installations withou
 attempt. The image leaves the machine (OmniRoute forwards it to the provider it picks), so OmniRoute is never part of
 `auto/private`. OcrRoute listens on 20256 and never binds 20128, so both run side by side. Costs are billed by the
 providers you connect in OmniRoute, not by OcrRoute (its cost estimate for OmniRoute is 0).
+
+## Models
+
+33 engines take a model id (`options.model`): the cloud vision-language engines (ChatGPT, Claude, Gemini, Grok, Groq,
+OpenRouter, OmniRoute, Perplexity, Qwen Cloud, SiliconFlow, Qianfan), Mistral OCR and AIML's Mistral route, NVIDIA
+Nemotron, and the local Hugging Face engines (TrOCR, GOT-OCR, Nougat, Chandra, DeepSeek-OCR, dots.ocr, GLM-OCR,
+Hunyuan, Infinity, MonkeyOCR, Nanonets-OCR2, olmOCR, Qwen-VL...). `GET /v1/engines/{id}/models` returns the default
+and the known models; `?live=1&provider_id=...` asks the provider's catalogue through that provider's credential
+(ChatGPT, Grok, Groq, OmniRoute, SiliconFlow, OpenRouter, Gemini, Claude, Mistral). Any other id is accepted: leave the
+box empty for the engine's default. The extra prompt (`prompt`) applies to the vision-language engines only and is
+appended to the engine's built-in OCR instructions; a provider can carry a default one in its options.
+
+## Languages
+
+Send canonical codes: `auto` (let the engine detect the language), then `en`, `ar`, `fr`, `zh`, `zh-Hant`,
+`sr-Latn`... (ISO 639-1, or ISO 639-3 when a language has no two-letter code). Other spellings are accepted and
+normalised (`eng`, `English`, `fre`, `chi_sim`, `en-US`...). Each engine translates them into its own format.
+
+`GET /v1/engines/{id}/languages` lists what an engine accepts, its default (`auto` when it can detect the language,
+else `en`) and its variants: OCR.Space engine 1 has 24 languages without auto-detection, engine 2 adds `auto`,
+engine 3 takes only `auto` (200+ languages); pass `?engine=1`. Vision-language models and other engines that detect
+the language themselves report no languages (the pickers show "automatic"). Tesseract lists the installed
+traineddata. When a request asks for a language an engine does not support, the engine's default is used and the
+routing trace says so.

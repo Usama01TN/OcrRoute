@@ -52,7 +52,7 @@ options, one-click provider creation and a probe button.
 | Cache & dedupe | Result cache keyed by input hash + target + options, idempotency keys, in-flight single-flight. |
 | Inputs / outputs | Path, URL (SSRF-guarded), base64, upload, PDF page ranges; exports: json, text, md, hOCR, ALTO, csv, xlsx, docx, searchable PDF, overlay PNG. |
 | Observability | Runs & attempts in SQLite, live SSE feed, Prometheus `/metrics`, `doctor` diagnostics with copyable system report. |
-| UIs | Web control panel (12 pages, **Bootstrap 5** + Bootstrap Icons vendored for offline use, mobile-first with an offcanvas sidebar) · PyQt5 desktop (10 pages, embedded/remote, region capture, overlay viewer, tray) · Typer CLI. Both UIs: **light / dark / system themes**, **English · Français · Español · Deutsch · Italiano · Português · Русский · 中文 · العربية (RTL)**, onboarding checklist, humanised times. |
+| UIs | Web control panel (12 pages, **Bootstrap 5** + Bootstrap Icons vendored for offline use, mobile-first with an offcanvas sidebar), PyQt5 desktop (10 pages, embedded/remote, region capture, overlay viewer, tray), Typer CLI. Both UIs: **light / dark / system themes**, **English, Français, Español, Deutsch, Italiano, Português, Русский, 中文, العربية (RTL)**, onboarding checklist, humanised times. |
 | Endpoints | Active endpoints with copy, all LAN URLs, tunnels (Cloudflare / Tailscale / ngrok) with install / enable / disable, public URL, global OCR prompt, server restart / shutdown. |
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
@@ -74,7 +74,7 @@ The stand-alone executables come in two editions:
 On Intel Macs the Full edition includes PaddleOCR but not EasyOCR or Surya: PyTorch publishes no Intel-Mac build newer
 than 2.2, which predates NumPy 2. EasyOCR, Surya and PaddleOCR download their model weights on first use.
 
-**Surya** is bundled as 0.17.1, the last release that runs OCR entirely in PyTorch; Surya 2 (0.20+) needs a vLLM or
+**Surya** is bundled as 0.8.0, the last release that runs OCR entirely in PyTorch; Surya 2 (0.20+) needs a vLLM or
 llama.cpp server (`pip install "ocrroute[surya2]"`). Surya's code is Apache-2.0, but its **model weights** use a
 modified AI Pubs Open Rail-M license: free for research, personal use and startups under $5M in funding or revenue;
 other commercial use needs a license from Datalab.
@@ -83,24 +83,10 @@ The remaining deep-learning engines (Calamari, keras-ocr, GLM, olmOCR) install o
 installation: click **Install** in the Engines page, run `ocrroute engines install SuryaOcr`, or
 `pip install "ocrroute[surya]"`. See `docs/ENGINES.md`.
 
-## Stand-alone executables:
-
-`python scripts/build_executable.py` builds two PyInstaller bundles - `ocrroute-server` (CLI + API + web panel;
-double-click starts the server) and `OcrRoute-Desktop` (PyQt5 app with the embedded server) - and archives them as
-`dist/ocrroute-<target>-<version>-<os>-<arch>.zip|.tar.gz`.
-
-The GitHub Actions workflow `.github/workflows/build.yml` does the same on **Windows, macOS (Intel + Apple silicon)
-and Linux** on every push/PR, uploads each bundle as a workflow artifact, writes the download link into the job
-summary, and - on a `v*` tag - publishes all of them with SHA-256 checksums to a GitHub Release:
-
-```
-git tag v0.2.0 && git push --tags     # → https://github.com/<you>/ocrroute/releases/tag/v0.2.0
-```
-
 ## Documentation:
 
-`docs/ARCHITECTURE.md` · `docs/ROUTING.md` · `docs/API.md` · `docs/ENGINES.md` · `docs/DEPLOYMENT.md` ·
-`docs/SECURITY.md` · `docs/TOOLS.md` · `docs/DECISIONS.md` · `docs/CHANGELOG.md`
+`docs/ARCHITECTURE.md`, `docs/ROUTING.md`, `docs/API.md`, `docs/ENGINES.md`, `docs/DEPLOYMENT.md`,
+`docs/SECURITY.md`, `docs/TOOLS.md`, `docs/DECISIONS.md`, `docs/CHANGELOG.md`
 
 ## Independence note:
 

@@ -1,5 +1,91 @@
 # Changelog
 
+## 0.8.0 - 2026-09-28
+
+- **Providers form: each setting once.** The separate "Model" box (the provider's `model` column) duplicated the
+  engine option `model`, and the option silently won; the form now has one model field (the engine option, with the
+  known-model suggestions and live refresh) and the column follows it. "Language" was a free-text `en` box: it is the
+  language dropdown (with "Also:" for engines that read several), labelled "Default language: used when a request
+  sends none or auto". The "Custom endpoint" label no longer talks about "any OpenAI-compatible base URL".
+- **Credential status shared across the cluster.** A key marked exhausted on one server (quota, rate limit or auth
+  error) is skipped by every server within seconds: members report their exhausted keys with each poll (a member that
+  just exhausted one polls at once), the primary merges and applies them and answers with the merged list (on 200 and
+  304). Only the timestamp travels, keyed by credential id plus a fingerprint of the secret, so a status applies only
+  where the secret is identical and never blocks a replaced key; a known later time is never moved earlier. Verified
+  with a primary and two members: a key that failed on one member was skipped by the others in a single attempt.
+- Empty option values (`ocrPrompt: ""`, `model: ""`, a blank extra prompt) are treated as "not set" on every path
+  (provider options, route overrides, request options), so an engine always keeps its built-in default; booleans and
+  0 are kept. A plugin created without a language now uses its own default (`auto` for engines that detect it: a
+  vision-language engine no longer gets an "English" hint by default; `en` for Tesseract).
+- **Fix: engine names in the catalog.** `OpenRouterOcr` was labelled "OpenAI-compatible VLM (custom endpoint)" with a
+  wrong vendor: it is **OpenRouter**. 36 engines had no catalog entry at all and showed names mangled from their class
+  names ("Glm OCR H F", "M M OCR", "Tr OCR", "Qwen2 Vl2b OCR", "Api4 Ai OCR"...). Every one of the 56 engines now has
+  its real name, vendor and homepage, taken from the plugin's own description (e.g. "GLM-OCR (local)" by Zhipu AI,
+  "MMOCR (OpenMMLab)", "TrOCR (printed)" by Microsoft, "Qwen-OCR (Alibaba Cloud Model Studio)", "NVIDIA
+  Nemotron-OCR", "AI/ML API (Mistral OCR route)", "OCR - Extract text (RapidAPI)").
+- **Model picker for the 33 engines that take a model** (cloud VLMs, Mistral OCR, Nemotron, local HF models...).
+  Every plugin declares `DEFAULT_MODEL` and its known `MODELS` (from its own constants and documentation), exposed by
+  `getModels()` and `GET /v1/engines/{id}/models`; any other model id is accepted. **Live listing** with `?live=1` and
+  a `provider_id`: the plugin asks the provider's catalogue through that provider's credential (ChatGPT, Grok, Groq,
+  OmniRoute, SiliconFlow via their existing discovery; new for OpenRouter, Gemini, Claude and Mistral), likely vision
+  models first. The Playground, Batch and Providers pages and the desktop app show a model box with the known models
+  as suggestions, the default as placeholder, and a Refresh button for the live list; empty = the engine's default.
+- **Extra prompt where it applies**: the Playground and desktop prompt fields (and a new one on the Batch page) are
+  shown only for engines that use a prompt (the vision-language engines) or for routes; the Providers form edits
+  `prompt` / `ocrPrompt` in a multi-line box. Batch jobs carry the prompt and options into each request; the batch
+  spec accepts `language` as a string or a list (the picker sends a string for one language).
+- **Languages: one vocabulary for every engine.** You always use canonical codes (`auto`, `en`, `ar`, `fr`, `zh`,
+  `zh-Hant`...); each engine translates them into its own format (`eng`, `fra`, `ch_sim`, `FRE`, `arabic`, a language
+  name in a prompt...). Every engine now answers the language picker (`GET /v1/engines/{id}/languages`), in one of
+  three modes: a **list** (Tesseract, EasyOCR, PaddleOCR, OCR.Space per engine 1-3, Google Vision, ScanDocFlow, Baidu,
+  RapidOCR), a **hint** (25 vision-language engines: they detect the language; a chosen language is sent to the model as
+  "The text is in Arabic: read it in that language and do not translate it"), or **fixed** (engines whose models read a
+  set script, e.g. TrOCR / keras-ocr / Nougat: English; GOT-OCR, MMOCR, OpenOCR: English and Chinese), which now say
+  what they read. The base plugin's `getLanguages()` stays an empty list for engines without a language setting.
+- **Several languages at once** where the engine reads them in one run: Tesseract (`eng+fra+ara`), EasyOCR, Google
+  Vision (hints) and the vision-language engines ("The text is in English, French and Arabic"). Engines declare it
+  (`MULTI_LANGUAGE`, reported as `multiple` by the languages endpoint); single-language engines (OCR.Space, Baidu,
+  PaddleOCR, RapidOCR...) keep one. The Playground, Batch and desktop pickers show an "Also:" row with removable chips
+  and a "+ Add a language" dropdown; the request carries the list. **EasyOCR's combination rules** are enforced
+  (`LANGUAGE_GROUPS`): Chinese, Japanese, Korean, Thai, Tamil, Telugu and Kannada only with English; Arabic-script,
+  Devanagari, Bengali and Cyrillic languages within their script plus English; Latin-script languages freely. The adder
+  only offers allowed combinations. EasyOCR's plugin now imports the library lazily (it can be described without it).
+- **All 56 engines audited** for how the language really reaches the request: 8 translate a list (Tesseract, EasyOCR,
+  PaddleOCR, OCR.Space, Google Vision, ScanDocFlow, Baidu, RapidOCR), 27 vision-language engines take a prompt hint
+  (including OpenRouter, OmniRoute, GLM-OCR and olmOCR, the last two added in this pass), 20 read a fixed script or have
+  no language parameter (Mistral OCR, AIML's Mistral route, Nemotron, API Ninjas, Api4AI, RapidAPI, EasyOCR.org,
+  Nanonets: their requests carry only the image), Surya detects. The table is generated into `docs/ENGINES.md`.
+  Verified end to end: a request with `["fr", "ar"]` makes OmniRoute send "The text is in French and Arabic".
+- **Baidu OCR** publishes its languages (25, all documented `language_type` values, `auto` = `auto_detect`) (`auto` = `auto_detect`) and no longer drops the requested language (it was
+  removed before the base class saw it, so every request went out as English).
+- **RapidOCR** selects its recognition model from the language (`Rec.lang_type`: `arabic`, `latin`, `cyrillic`,
+  `devanagari`, `japan`, `korean`...; Chinese + English stay on the default model); an explicit `engineParams` override
+  wins. The list is checked against the installed `rapidocr.LangRec` when available.
+- Playground, Batch and desktop pickers explain hints ("sent to the model as a hint") and fixed scripts ("reads
+  English, no language setting"); `auto` is preselected when available, else `en`. Tested in a real browser across
+  Gemini, TrOCR, OCR.Space engines 1/2 and Baidu.
+
+## 0.8.0 - 2026-09-27
+
+- **Languages, one format everywhere.** Always send canonical codes (`auto`, `en`, `ar`, `fr`, `zh`, `zh-Hant`...;
+  any spelling is accepted: `eng`, `English`, `fre`, `chi_sim`, `en-US`...). Each engine translates them into its own
+  format: OCR.Space `ara` / `chs` / `fre` (per engine), Tesseract `ara` / `chi_sim`, EasyOCR `ch_sim` / `rs_latin`,
+  PaddleOCR `ch` / `japan` / `chinese_cht`, Google Vision BCP-47 hints, ScanDocFlow `chi` / `ara`. The requests'
+  default is now `auto` (the engine's own default when it cannot detect languages: English).
+- **AioOCR plugin API** (`engines/ocrplugin.py`, shared table `engines/languages.py`): `getLanguages(engine=None)`
+  (empty list by default: the engine takes no language setting), `getEngines()` (variants whose languages differ,
+  e.g. OCR.Space 1-3), `defaultLanguage()` (`auto` when supported, else `en`), `toEngineLanguage()`,
+  `describeLanguages()` and `getEngineLanguages()`. Language lists come from the libraries' own tables (EasyOCR 1.7.2,
+  PaddleOCR 3.3.0, Surya 0.17), OCR.Space's documentation and, for Tesseract, the installed traineddata.
+- **Language pickers** replace the text fields in the Playground, Batch and the desktop Scan page: the chosen engine's
+  languages (`auto` preselected when available, else `en`); an **Engine variant** picker for OCR.Space whose choice
+  changes the list; "automatic" for engines that detect the language themselves; every language for routes.
+- An unsupported language is replaced by the engine's default and explained in the routing trace ("Tesseract: Arabic
+  not available (install its traineddata to use it) -> used English").
+- API: `GET /v1/languages`, `GET /v1/engines/{id}/languages?engine=`.
+- Fixes: ScanDocFlow ignored the requested language (set before the base initialiser, which reset it to English);
+  OCR.Space sent the raw value (`en`, a list) instead of its 3-letter codes.
+
 ## 0.7.1 - 2026-09-25
 
 - **Desktop app on ManyQt** (https://github.com/Usama01TN/ManyQt): every Qt import goes through ManyQt, so the app

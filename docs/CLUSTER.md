@@ -19,6 +19,14 @@ can **Delete cluster**. Leaving or being removed keeps the configuration the ser
 
 After joining, a member uses the primary's API keys and panel users: sign in with an account from the primary.
 
+## Shared credential status
+
+When a server rotates away from an API key (quota, rate limit or auth error), it marks the key "exhausted until" a
+time. That status is shared: members report it to the primary with their next poll (at once after a rotation), the
+primary merges everyone's and hands the list back, so every server skips the key until it is due for a retry. Only the
+timestamp travels (with a fingerprint of the secret, so it never applies to a different key). Usage counters, cost
+history and provider health stay per server.
+
 ## Addresses
 
 The join code carries every address of the primary, best first: running tunnels (Endpoints page), its public URL, then
