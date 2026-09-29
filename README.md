@@ -10,7 +10,7 @@ OCR, …) in a FastAPI gateway with a web control panel, a desktop app (ManyQt: 
 a single SQLite file.
 
 ```
-pip install -e ".[local,desktop,dev]"   # core + Tesseract/OpenCV extras + ManyQt + tests
+pip install -e ".[local,desktop,dev]"   # core + Tesseract/OpenCV extras + PyQt5 + tests
 ocrroute setup                          # admin user, first provider, default route, API key
 ocrroute serve                          # API  http://127.0.0.1:20256/v1/docs
                                         # panel http://127.0.0.1:20256/panel/
@@ -29,7 +29,7 @@ The response keeps the engine library's unified result **verbatim** under `resul
 metadata beside it (`routing.attempts`, `routing.explain`, `usage`, `artifacts`). See
 [docs/API.md](docs/API.md).
 
-## Screenshots:
+## Screenshots
 
 **Playground**: run any engine or route on an image or PDF and inspect the result as text, lines, JSON, routing or
 ready-to-use code, with the recognised words drawn over the input.
@@ -41,7 +41,7 @@ options, one-click provider creation and a probe button.
 
 ![OcrRoute Engines page: cards for each detected engine with availability, capabilities and actions](docs/screenshots/engines.png)
 
-## What you get:
+## What you get
 
 | Area | Highlights |
 |---|---|
@@ -52,17 +52,17 @@ options, one-click provider creation and a probe button.
 | Cache & dedupe | Result cache keyed by input hash + target + options, idempotency keys, in-flight single-flight. |
 | Inputs / outputs | Path, URL (SSRF-guarded), base64, upload, PDF page ranges; exports: json, text, md, hOCR, ALTO, csv, xlsx, docx, searchable PDF, overlay PNG. |
 | Observability | Runs & attempts in SQLite, live SSE feed, Prometheus `/metrics`, `doctor` diagnostics with copyable system report. |
-| UIs | Web control panel (12 pages, **Bootstrap 5** + Bootstrap Icons vendored for offline use, mobile-first with an offcanvas sidebar), PyQt5 desktop (10 pages, embedded/remote, region capture, overlay viewer, tray), Typer CLI. Both UIs: **light / dark / system themes**, **English, Français, Español, Deutsch, Italiano, Português, Русский, 中文, العربية (RTL)**, onboarding checklist, humanised times. |
+| UIs | Web control panel (12 pages, **Bootstrap 5** + Bootstrap Icons vendored for offline use, mobile-first with an offcanvas sidebar) · PyQt5 desktop (10 pages, embedded/remote, region capture, overlay viewer, tray) · Typer CLI. Both UIs: **light / dark / system themes**, **English · Français · Español · Deutsch · Italiano · Português · Русский · 中文 · العربية (RTL)**, onboarding checklist, humanised times. |
 | Endpoints | Active endpoints with copy, all LAN URLs, tunnels (Cloudflare / Tailscale / ngrok) with install / enable / disable, public URL, global OCR prompt, server restart / shutdown. |
 | Auto-detection | Every `OCRPlugin` in `AioOCR` is discovered by the library's own discovery, seeded as a provider, and re-detected live when modules are added or dependencies installed (file watcher + periodic rescan). |
 | Tools | Reserved, intentionally empty extension point (`/v1/tools`, `ocrroute/tools`, empty-state pages). See [docs/TOOLS.md](docs/TOOLS.md). |
 
-## Several servers:
+## Several servers
 
 Run one **leader** and any number of **followers**: followers mirror the leader's providers, credentials, routes,
 API keys and users. Set it up from the web panel (**System > Cluster sync**) or with `.env`; see `docs/CLUSTER.md`.
 
-## Editions and more engines:
+## Editions and more engines
 
 The stand-alone executables come in two editions:
 
@@ -74,7 +74,7 @@ The stand-alone executables come in two editions:
 On Intel Macs the Full edition includes PaddleOCR but not EasyOCR or Surya: PyTorch publishes no Intel-Mac build newer
 than 2.2, which predates NumPy 2. EasyOCR, Surya and PaddleOCR download their model weights on first use.
 
-**Surya** is bundled as 0.8.0, the last release that runs OCR entirely in PyTorch; Surya 2 (0.20+) needs a vLLM or
+**Surya** is bundled as 0.17.1, the last release that runs OCR entirely in PyTorch; Surya 2 (0.20+) needs a vLLM or
 llama.cpp server (`pip install "ocrroute[surya2]"`). Surya's code is Apache-2.0, but its **model weights** use a
 modified AI Pubs Open Rail-M license: free for research, personal use and startups under $5M in funding or revenue;
 other commercial use needs a license from Datalab.
@@ -83,12 +83,35 @@ The remaining deep-learning engines (Calamari, keras-ocr, GLM, olmOCR) install o
 installation: click **Install** in the Engines page, run `ocrroute engines install SuryaOcr`, or
 `pip install "ocrroute[surya]"`. See `docs/ENGINES.md`.
 
-## Documentation:
+## Stand-alone executables
 
-`docs/ARCHITECTURE.md`, `docs/ROUTING.md`, `docs/API.md`, `docs/ENGINES.md`, `docs/DEPLOYMENT.md`,
-`docs/SECURITY.md`, `docs/TOOLS.md`, `docs/DECISIONS.md`, `docs/CHANGELOG.md`
+`python scripts/build_executable.py` builds two PyInstaller bundles - `ocrroute-server` (CLI + API + web panel;
+double-click starts the server) and `OcrRoute-Desktop` (PyQt5 app with the embedded server) - and archives them as
+`dist/ocrroute-<target>-<version>-<os>-<arch>.zip|.tar.gz`.
 
-## Independence note:
+The GitHub Actions workflow `.github/workflows/build.yml` does the same on **Windows, macOS (Intel + Apple silicon)
+and Linux** on every push/PR, uploads each bundle as a workflow artifact, writes the download link into the job
+summary, and - on a `v*` tag - publishes all of them with SHA-256 checksums to a GitHub Release:
+
+```
+git tag v0.2.0 && git push --tags     # → https://github.com/<you>/ocrroute/releases/tag/v0.2.0
+```
+
+## Code style
+
+Syntax is kept Python 2/3-portable (`from __future__` headers, `py23` shims, no f-strings or keyword-only args);
+see `docs/DECISIONS.md` #18 for the exact boundaries imposed by the frameworks.
+
+The gateway is written in the same conventions as AioOCR: `# coding=utf-8` headers, `class X(object)`,
+`super(Class, self)`, `__m_` private attributes with `getX`/`setX` accessors, camelCase methods, `:param:`
+docstrings and `.format()` strings. Type hints appear only where SQLAlchemy, Pydantic, FastAPI or Typer need them.
+
+## Documentation
+
+`docs/ARCHITECTURE.md` · `docs/ROUTING.md` · `docs/API.md` · `docs/ENGINES.md` · `docs/DEPLOYMENT.md` ·
+`docs/SECURITY.md` · `docs/TOOLS.md` · `docs/DECISIONS.md` · `docs/CHANGELOG.md`
+
+## Independence note
 
 Design patterns for gateway routing (fallback chains, balancing strategies, key management, dashboards)
 are widely used in the ecosystem; OcrRoute applies them to OCR. OcrRoute is an independent Python project
@@ -96,29 +119,29 @@ with its own namespace (`ocrroute`, `~/.ocrroute`, `OCRROUTE_*`), its own defaul
 refuses to bind 20128), and no chat/completions, LLM proxying or agent-protocol surface. It is not a fork,
 plugin or companion of any other gateway.
 
-## Desktop app and Qt:
+## Desktop app and Qt
 
 The desktop app is written against [ManyQt](https://github.com/Usama01TN/ManyQt), one API over PyQt4/5/6 and
 PySide/2/6. The executables ship PyQt5; from source, `pip install "ocrroute[desktop]"` installs ManyQt with PyQt5, and
 any other installed binding works too (`QT_API=pyqt6`, `QT_API=pyside6`...). ManyQt is GPL-3.0, like PyQt5.
 
-## Support the project:
+## Support the project
 
 OcrRoute is free and open source. If it saves you time or money, you can support its development:
 
 [![Support on ba9chich](https://img.shields.io/badge/Support-ba9chich-2ea44f?style=for-the-badge)](https://ba9chich.com/fr/IninouUsama)
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/usamatn)
 
-- **ba9chich**: https://ba9chich.com/fr/IninouUsama
-- **Ko-fi**: https://ko-fi.com/usamatn
+- **ba9chich** (Tunisia and North Africa, local payment methods): https://ba9chich.com/fr/IninouUsama
+- **Ko-fi** (international, card or PayPal): https://ko-fi.com/usamatn
 
 Stars, bug reports and pull requests help too. Thank you!
 
-## Third-party assets:
+## Third-party assets
 
 `ocrroute/assets/fonts/DejaVuSans.ttf` is DejaVu Sans (Bitstream Vera license; see `LICENSE-DejaVu.txt` next to it),
 used by PaddleOCR for visualisations.
 
-## License:
+## License
 
-MIT - see `LICENSE`.
+MIT - see `LICENSE`. The `AioOCR/` library is included as given and keeps its original authorship.

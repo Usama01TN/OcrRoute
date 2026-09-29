@@ -85,6 +85,17 @@ def test_omniroute_ocr_end_to_end(client, admin_headers):
                         data={'json': json.dumps({'engine': 'OmniRouteOcr', 'cache': False, 'options': {'model': 'gemini/gemini-2.5-flash'}})},
                         headers=admin_headers).json()
         assert r['status'] == 'succeeded' and seen[-1]['model'] == 'gemini/gemini-2.5-flash'
+        # a GIF arrives as PNG: the request never carries bytes that contradict the declared image type
+        import base64
+        import re
+
+        gif = BytesIO()
+        Image.new('P', (120, 60), 0).save(gif, 'GIF')
+        r = client.post('/v1/ocr', files={'file': ('anim.gif', gif.getvalue())},
+                        data={'json': json.dumps({'engine': 'OmniRouteOcr', 'cache': False})}, headers=admin_headers).json()
+        assert r['status'] == 'succeeded', r.get('error_message')
+        m = re.search(r'data:(image/\w+);base64,([A-Za-z0-9+/=]+)', seen[-1]['text'])
+        assert m and m.group(1) == 'image/png' and base64.b64decode(m.group(2)).startswith(b'\x89PNG')
         sim = client.post('/v1/routes/simulate', json={'route': 'auto/private'}, headers=admin_headers).json()
         assert not any(c.get('engine') == 'OmniRouteOcr' for c in sim.get('candidates', []))  # images leave the machine
     finally:

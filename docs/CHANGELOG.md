@@ -2,6 +2,18 @@
 
 ## 0.8.0 - 2026-09-28
 
+- **Fix: OCR.Space engine 3 returned no text ("Overlay requested but no regions were detected") for a GIF unless a
+  preprocessing option was ticked.** Cause: for in-memory input, `imageBytes()` returned the original bytes and 21
+  cloud engines labelled them `image/png`; a GIF (or WebP, BMP, TIFF) thus reached the API mislabelled. Engines 1 and
+  2 sniff the real format, engine 3 does not, and strict APIs (Claude, Gemini) reject the mismatch. `imageBytes()`
+  now keeps PNG and JPEG as they are and turns every other image format into PNG (first frame of an animated GIF),
+  `imageMime()` / `imageDataUrl()` label what is really sent, PDFs pass through, and OCR.Space converts a file path
+  the same way. Verified end to end: a GIF sent through OcrRoute arrives at the provider as a real PNG.
+- OCR.Space: uploads larger than the plan's limit are shrunk first (new option `maxBytes`, default 1 MB, the free
+  plan's limit; 0 disables): re-encoded as JPEG, then downscaled step by step.
+- Fix (CI): a unit test assumed no network and expected OpenRouter's model list to be the known one; on online runners
+  the live catalogue answered. The fallback is now tested deterministically (a failing live call falls back to the
+  known list) and a live answer is accepted.
 - **Providers form: each setting once.** The separate "Model" box (the provider's `model` column) duplicated the
   engine option `model`, and the option silently won; the form now has one model field (the engine option, with the
   known-model suggestions and live refresh) and the column follows it. "Language" was a free-text `en` box: it is the

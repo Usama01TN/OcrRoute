@@ -280,3 +280,58 @@ def test_credential_status_only_applies_to_the_same_secret():
     merged = sync.mergeStatuses(store, [{'k': 'x', 'u': '2999-01-01T00:00:00+00:00'}, {'k': 'y', 'u': '2000-01-01T00:00:00+00:00'}], '2026-01-01T00:00:00+00:00')
     assert merged == [{'k': 'x', 'u': '2999-01-01T00:00:00+00:00'}]  # expired reports are dropped
     assert getSettings().home is not None
+
+
+def test_image_bytes_match_the_declared_format():
+    """GIF / WebP / BMP / TIFF become PNG; PNG and JPEG pass through; PDF is untouched; JPEG can be forced."""
+    import sys
+    from io import BytesIO
+
+    from PIL import Image
+
+    sys.path.insert(0, 'AioOCR')
+    from engines.ocrplugin import OCRPlugin
+
+    def enc(fmt, mode='RGB', frames=1):
+        im = Image.new(mode, (40, 20), 'white')
+        b = BytesIO()
+        if frames > 1:
+            im.save(b, format=fmt, save_all=True, append_images=[Image.new(mode, (40, 20), 'black')])
+        else:
+            im.save(b, format=fmt)
+        return b.getvalue()
+
+    for fmt, mode, frames in (('GIF', 'P', 1), ('GIF', 'P', 3), ('WEBP', 'RGB', 1), ('BMP', 'RGB', 1), ('TIFF', 'RGB', 1)):
+        out = OCRPlugin(image=enc(fmt, mode, frames)).imageBytes()
+        assert OCRPlugin.sniffFormat(out) == 'PNG', fmt
+        assert Image.open(BytesIO(out)).size == (40, 20)
+    for fmt in ('PNG', 'JPEG'):
+        data = enc(fmt)
+        assert OCRPlugin(image=data).imageBytes() == data  # untouched
+    assert OCRPlugin.sniffFormat(OCRPlugin(image=enc('PNG')).imageBytes('JPEG')) == 'JPEG'
+    assert OCRPlugin(image=b'%PDF-1.4 fake').imageBytes() == b'%PDF-1.4 fake'
+    plugin = OCRPlugin(image=enc('GIF', 'P'))
+    assert plugin.imageMime() == 'image/png' and plugin.imageDataUrl().startswith('data:image/png;base64,')
+    assert OCRPlugin(image=enc('JPEG')).imageMime() == 'image/jpeg'
+
+
+def test_ocrspace_shrinks_uploads_under_the_plan_limit():
+    import sys
+    from io import BytesIO
+
+    import numpy as np
+    from PIL import Image
+
+    sys.path.insert(0, 'AioOCR')
+    from engines.api.ocrspace import OcrSpace
+
+    noise = Image.fromarray((np.random.rand(1400, 1400, 3) * 255).astype('uint8'))
+    b = BytesIO()
+    noise.save(b, 'PNG')
+    data = b.getvalue()
+    assert len(data) > 1000000
+    out = OcrSpace(api='k', image=data)._fitBytes(data)
+    assert len(out) <= 1000000 and OcrSpace.sniffFormat(out) == 'JPEG'
+    assert OcrSpace(api='k', image=data, maxBytes=0)._fitBytes(data) is data          # no limit: untouched
+    assert OcrSpace(api='k', image=data, maxBytes=2 * 1024 * 1024)._fitBytes(data[:1000]) == data[:1000]
+    assert OcrSpace(api='k', image=b'%PDF-1.4' + b'x' * 2000000, maxBytes=1000)._fitBytes(b'%PDF-1.4' + b'x' * 2000000).startswith(b'%PDF')  # PDFs are not re-encoded
