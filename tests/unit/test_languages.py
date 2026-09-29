@@ -193,8 +193,17 @@ def test_engines_declare_their_models():
     assert OpenRouterOcr.defaultModel() == 'openrouter/free'
     assert TrOcr.defaultModel().startswith('microsoft/trocr') and len(TrOcr.getModels()) == 1
     assert OcrSpace.defaultModel() == '' and OcrSpace.getModels() == []
-    # offline, listModels falls back to the known list instead of failing
-    assert OpenRouterOcr(api='k').listModels()[0]['source'] == 'known'
+    # listModels: the provider's live catalogue when reachable (CI runners are online), else the known list; and a
+    # failing live call (offline, provider down) falls back to the known list instead of raising
+    models = OpenRouterOcr(api='k').listModels()
+    assert models and models[0]['source'] in ('known', 'live') and all(m['id'] for m in models)
+
+    class Offline(OpenRouterOcr):
+        def _liveModels(self):
+            raise ConnectionError('no network')
+
+    fallback = Offline(api='k').listModels()
+    assert fallback[0]['source'] == 'known' and fallback[0]['id'] == 'openrouter/free'
 
 
 def test_empty_option_values_keep_the_engine_defaults():
