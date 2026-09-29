@@ -305,3 +305,8 @@ def pluginNames():
 
 __all__ = ['AioOCR', 'AVAILABLE_PLUGINS', 'AIOOCR_ROOT', 'ENGINES_ROOT', 'OCRError', 'OCRPlugin', 'OcrBase',
            'enginePackages', 'enginesSnapshot', 'is_url', 'pluginNames', 'rediscover']
+
+
+# The shared language table (canonical codes: auto, en, ar, fr...), re-exported for OcrRoute's API, executor and
+# user interfaces ("import x as x" marks an intended re-export, so linters keep it).
+from engines import languages as languages  # noqa: E402

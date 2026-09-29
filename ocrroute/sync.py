@@ -256,10 +256,12 @@ class Follower(object):
         """
         with self.lock:
             self.state['last_attempt_at'] = datetime.now(timezone.utc).isoformat()
+            statuses = []
             try:
                 with self.sessionFactory() as db:
                     fstate = loadFollowerState(db)
                     myUrls = [a['url'] for a in publicAddresses(self._appSettings(), db)]
+                    statuses = credentialStatuses(db, self.secrets)
             except Exception:  # noqa: BLE001
                 fstate, myUrls = {'leader_id': '', 'addresses': [], 'active_url': '', 'pushed': []}, []
             configuredList = [a['url'] for a in (getattr(self.settings, 'sync_leader_urls', None)
@@ -274,7 +276,7 @@ class Follower(object):
                 self.state['_primary_checked'] = now
             candidates = _cleanUrls(ordered + fstate['pushed'] + fstate['addresses'], limit=20)
             health = self.state.setdefault('address_health', {})
-            identity = dict(nodeIdentity(self.state['digest']), urls=_cleanUrls(myUrls))
+            identity = dict(nodeIdentity(self.state['digest']), urls=_cleanUrls(myUrls), cred_status=statuses)
             failures, done = [], False
             for url in candidates:
                 h = health.setdefault(url, {})
@@ -354,10 +356,15 @@ class Follower(object):
                 result = applySnapshot(db, self.secrets, self.settings.sync_token, snapshot)
             self.state.update(digest=snapshot['digest'], last_change_at=self.state['last_attempt_at'], last_result=result)
             log.info('sync applied', digest=snapshot['digest'][:12], **{k: v for k, v in result['upserted'].items()})
+        if leader.get('cred_status'):
+            with self.sessionFactory() as db:
+                n = applyCredentialStatuses(db, self.secrets, leader['cred_status'])
+            if n:
+                log.info('credential status received from the primary', credentials=n)
         if self.state.get('last_error'):
             log.info('sync working again', via=url)
-        self.state.update(last_success_at=self.state['last_attempt_at'], last_error=None, consecutive_failures=0, via=url)
-        # remember the leader's addresses; keep the saved leader address current when another one worked
+        # remember the leader's addresses first (a learned address joins the saved list), THEN publish the success:
+        # a status read in between must never show "via B" while B is not yet in the list
         with self.sessionFactory() as db:
             st = loadFollowerState(db)
             st['leader_id'] = str(leader.get('id') or st['leader_id'])
@@ -375,6 +382,7 @@ class Follower(object):
                     self.settings.sync_leader_urls = leaders
                     log.info('leader address added', url=url)
         self.state['leader_addresses'] = _cleanUrls(leader.get('addresses') or [])
+        self.state.update(last_success_at=self.state['last_attempt_at'], last_error=None, consecutive_failures=0, via=url)
         if leader.get('members') is not None:
             self.state['members'] = leader.get('members')
             self.state['primary_name'] = next((m.get('name') for m in leader['members'] if m.get('role') == 'primary'), '')
@@ -564,6 +572,9 @@ class SyncManager(object):
         self.config = None
         self.follower = None
         self.lock = threading.Lock()
+        self.credStatus = {}          # primary: merged exhaustions reported by members (key -> until)
+        self._lastPromptPoll = 0.0
+        registerExhaustionListener(self._onExhausted)
 
     @property
     def role(self):
@@ -600,6 +611,16 @@ class SyncManager(object):
                                                 daemon=True)
                 self.watcher.start()
                 log.info('cluster sync: serving snapshots to followers', source=config.source)
+
+    def _onExhausted(self, credId):
+        """A key was just marked exhausted here: a member tells the primary right away (throttled to one per 5 s)."""
+        if self.follower is None:
+            return
+        now = time.time()
+        if now - self._lastPromptPoll < 5:
+            return
+        self._lastPromptPoll = now
+        threading.Thread(target=self.follower.syncOnce, name='ocrroute-sync-cred', daemon=True).start()
 
     def configure(self, role, token, leaderUrl, interval, leaders=None, clusterName=None):
         """
@@ -1339,3 +1360,102 @@ def explainNotLeader(url, http=None):
 
 
 __all__ += ['baseUrl', 'explainNotLeader', 'isLoopback']
+
+
+# --------------------------------------------------------------------------------------------------------------- #
+# credential status across the cluster: a key over quota on one server is skipped everywhere within seconds      #
+# --------------------------------------------------------------------------------------------------------------- #
+# Each server marks a key "exhausted until <time>" after a quota / rate-limit / auth error. Members report their
+# future exhaustions with every poll; the primary merges them with its own, applies them, and answers with the merged
+# list (on 200 and 304). Only the timestamp travels, keyed by the credential id plus a fingerprint of the secret, so a
+# status is applied only where the secret is the same (never to a replaced key).
+_SECRET_FP_CACHE = {}
+_EXHAUSTION_LISTENERS = []
+
+
+def _secretFingerprint(secrets, cred):
+    key = (cred.id, bytes(cred.secret_enc) if isinstance(cred.secret_enc, (bytes, bytearray)) else str(cred.secret_enc))
+    fp = _SECRET_FP_CACHE.get(key)
+    if fp is None:
+        try:
+            plain = secrets.decrypt(cred.secret_enc)
+            plain = plain.decode('utf-8') if isinstance(plain, bytes) else str(plain)
+        except Exception:  # noqa: BLE001
+            return ''
+        fp = hashlib.sha256(('ocrroute-cred:' + plain).encode('utf-8')).hexdigest()[:12]
+        if len(_SECRET_FP_CACHE) > 5000:
+            _SECRET_FP_CACHE.clear()
+        _SECRET_FP_CACHE[key] = fp
+    return fp
+
+
+def credentialStatuses(db, secrets, now=None):
+    """
+    :return: list[dict]  this server's currently exhausted credentials: {'k': '<id>:<fingerprint>', 'u': iso until}
+    """
+    from ocrroute.db.base import utcnow
+
+    now = now or utcnow()
+    out = []
+    for cred in db.query(Credential).all():
+        if cred.exhausted_until and cred.exhausted_until > now:
+            fp = _secretFingerprint(secrets, cred)
+            if fp:
+                out.append({'k': '{}:{}'.format(cred.id, fp), 'u': cred.exhausted_until})
+    return out
+
+
+def applyCredentialStatuses(db, secrets, statuses, now=None):
+    """
+    Mark credentials exhausted as reported by other servers (only when the secret fingerprint matches, and only when
+    the reported time is later than what this server already knows).
+
+    :return: int  credentials updated
+    """
+    from ocrroute.db.base import utcnow
+
+    now = now or utcnow()
+    changed = 0
+    for item in statuses or []:
+        try:
+            cid, fp = str(item.get('k', '')).split(':', 1)
+            until = str(item.get('u') or '')
+        except (ValueError, AttributeError):
+            continue
+        if not until or until <= now:
+            continue
+        cred = db.get(Credential, cid)
+        if cred is None or _secretFingerprint(secrets, cred) != fp:
+            continue
+        if not cred.exhausted_until or cred.exhausted_until < until:
+            cred.exhausted_until = until
+            changed += 1
+    return changed
+
+
+def mergeStatuses(store, statuses, now):
+    """Keep the latest 'until' per key in ``store`` (a dict), dropping expired entries."""
+    for item in statuses or []:
+        k, u = item.get('k'), str(item.get('u') or '')
+        if k and u > now and u > store.get(k, ''):
+            store[k] = u
+    for k in [k for k, u in store.items() if u <= now]:
+        del store[k]
+    return [{'k': k, 'u': u} for k, u in sorted(store.items())]
+
+
+def registerExhaustionListener(fn):
+    if fn not in _EXHAUSTION_LISTENERS:
+        _EXHAUSTION_LISTENERS.append(fn)
+
+
+def notifyExhausted(credId):
+    """Called by the executor right after a credential was marked exhausted: a member polls the primary at once."""
+    for fn in list(_EXHAUSTION_LISTENERS):
+        try:
+            fn(credId)
+        except Exception:  # noqa: BLE001 - never disturb the OCR path
+            pass
+
+
+__all__ += ['applyCredentialStatuses', 'credentialStatuses', 'mergeStatuses', 'notifyExhausted', 'registerExhaustionListener']

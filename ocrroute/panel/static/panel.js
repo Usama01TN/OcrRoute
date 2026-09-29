@@ -164,5 +164,155 @@
 
     window.showDialog = (el) => { if (!el) return; if (el.tagName === "DIALOG") el.showModal(); else bootstrap.Modal.getOrCreateInstance(el).show(); };
   window.hideDialog = (el) => { if (!el) return; if (el.tagName === "DIALOG") el.close(); else bootstrap.Modal.getOrCreateInstance(el).hide(); };
-  window.OcrRoute = { api, toast, confirmDo, fmtMs, fmtCents, chart, liveFeed, repaintCharts, $, $$ };
+
+  // Language picker: a <select> of the languages the chosen engine accepts ("auto" preselected when the engine can
+  // detect the language, else "en"), plus an engine-variant <select> for engines whose languages depend on it
+  // (OCR.Space engines 1-3). Routes list every language. Engines without a language setting show "automatic".
+  // Model picker: a text box with the engine's known models as suggestions (datalist), a "live" refresh that asks the
+  // provider's account for its current catalogue, and a note. Hidden for engines without a model setting.
+  function modelPicker(cfg) {
+    const {target, input, list, refresh, wrap, note, providerId} = cfg;  // target: select whose value is "engine:<id>", or engineId()
+    const T = (k) => (window.I18N && window.I18N[k]) || k;
+    const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+    let seq = 0, current = null;
+    const setNote = (text, bad) => { if (note) { note.textContent = text || ""; note.className = "form-text " + (bad ? "text-danger" : "text-muted") + (text ? "" : " d-none"); } };
+    const engineId = () => { if (typeof target === "function") return target(); const t = target.value || ""; return t.startsWith("engine:") ? t.slice(7) : ""; };
+    function fill(d) {
+      list.innerHTML = (d.models || []).map((m) => `<option value="${esc(m.id)}">${esc(m.label || m.id)}</option>`).join("");
+      input.placeholder = d.default || "";
+      if (!input.value || input.dataset.auto === "1") { input.value = ""; input.dataset.auto = "1"; }  // empty = the engine's default
+    }
+    async function load(live) {
+      const id = engineId(), my = ++seq;
+      if (!id) { if (wrap) wrap.classList.add("d-none"); current = null; return; }
+      let q = "";
+      const pid = typeof providerId === "function" ? providerId() : providerId;
+      if (live && pid) q = "?live=1&provider_id=" + encodeURIComponent(pid);
+      let d;
+      try { d = await api("GET", "/v1/engines/" + encodeURIComponent(id) + "/models" + q); } catch (e) { d = null; }
+      if (my !== seq) return;
+      current = d;
+      if (!d || !d.has_model) { if (wrap) wrap.classList.add("d-none"); return; }
+      if (wrap) wrap.classList.remove("d-none");
+      fill(d);
+      if (live) setNote(d.source === "live" ? T("Live list from the provider") + " (" + (d.models || []).length + ")" : (d.error || T("Known models")), !!d.error && d.source !== "live");
+      else setNote(d.available === false ? T("This engine is not installed here.") : T("Default:") + " " + (d.default || "-") + (pid ? ". " + T("Refresh asks the provider for its current models.") : ""), false);
+    }
+    input.addEventListener("input", () => { input.dataset.auto = input.value ? "0" : "1"; });
+    if (refresh) refresh.onclick = () => load(true);
+    if (typeof target !== "function") target.addEventListener("change", () => { input.value = ""; input.dataset.auto = "1"; load(false); });
+    load(false);
+    return {load, value: () => input.value.trim(), engineId};
+  }
+
+  function languagePicker(cfg) {
+    const {target, lang, variant, variantWrap, note} = cfg;
+    const T = (k) => (window.I18N && window.I18N[k]) || k;
+    const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+    let all = null, seq = 0, picked = "";  // picked: a language the user chose (kept when the same target reloads, e.g. a variant change)
+    let lastTarget = null;
+    // several languages: the dropdown is the first one; "Also:" chips add more, within the engine's combination rules
+    let multi = null, extra = [], names = {};
+    const wrap = document.createElement("div");
+    wrap.className = "d-none mt-1 small lang-multi";
+    lang.insertAdjacentElement("afterend", wrap);
+    const setNote = (text) => { if (note) { note.textContent = text || ""; note.classList.toggle("d-none", !text); } };
+    function compatible(chosen) {  // mirrors OCRPlugin.compatibleLanguages
+      const codes = multi.codes, universal = new Set(multi.universal || ["en"]);
+      const specific = chosen.filter((c) => c !== "auto" && !universal.has(c));
+      if (!multi.groups.length || !specific.length) return codes.filter((c) => !chosen.includes(c));
+      const grouped = new Set(multi.groups.flat());
+      const free = new Set(codes.filter((c) => !grouped.has(c) && !universal.has(c)));
+      const allowed = new Set(universal);
+      if (specific.every((c) => free.has(c))) free.forEach((c) => allowed.add(c));
+      multi.groups.forEach((g) => { if (specific.every((c) => g.includes(c))) g.forEach((c) => allowed.add(c)); });
+      return codes.filter((c) => allowed.has(c) && !chosen.includes(c));
+    }
+    function renderMulti() {
+      if (!multi) { wrap.classList.add("d-none"); wrap.innerHTML = ""; return; }
+      const first = lang.value, chosen = [first, ...extra];
+      const compat = compatible(chosen);
+      extra = extra.filter((c) => c !== first);  // the first language is not repeated
+      const options = compat.map((c) => `<option value="${esc(c)}">${esc((names[c] || c) + " (" + c + ")")}</option>`).join("");
+      wrap.innerHTML = `<span class="text-muted me-1">${esc(T("Also:"))}</span>` +
+        extra.map((c) => `<span class="badge text-bg-secondary me-1 lang-chip" data-c="${esc(c)}">${esc(names[c] || c)} <a href="#" class="text-white text-decoration-none lang-x" data-c="${esc(c)}" title="${esc(T("Remove"))}">&times;</a></span>`).join("") +
+        (options ? `<select class="form-select form-select-sm d-inline-block w-auto lang-add"><option value="">${esc(T("+ Add a language…"))}</option>${options}</select>` : "") +
+        (multi.groups.length && extra.length ? `<div class="form-text">${esc(T("Only combinations this engine supports are offered."))}</div>` : "");
+      wrap.classList.remove("d-none");
+      wrap.querySelectorAll(".lang-x").forEach((a) => a.onclick = (e) => { e.preventDefault(); extra = extra.filter((c) => c !== a.dataset.c); renderMulti(); });
+      const add = wrap.querySelector(".lang-add");
+      if (add) add.onchange = () => { if (add.value) { extra.push(add.value); renderMulti(); } };
+    }
+    lang.addEventListener("change", () => {
+      picked = lang.value;
+      if (multi) {  // an incompatible extra is dropped when the first language changes
+        const ok = new Set(compatible([lang.value]));
+        extra = extra.filter((c) => ok.has(c) || c === "auto");
+        renderMulti();
+      }
+    });
+    function fill(list, def, keep) {
+      lang.disabled = false;
+      lang.innerHTML = list.map((l) => `<option value="${esc(l.code)}">${esc(l.code === "auto" ? T("Automatic (detect the language)") : l.name + " (" + l.code + ")")}</option>`).join("");
+      const codes = list.map((l) => l.code);
+      lang.value = codes.includes(keep) ? keep : (codes.includes(def) ? def : (codes[0] || "auto"));
+      names = Object.fromEntries(list.map((l) => [l.code, l.name]));
+    }
+    function setMulti(d, list) {
+      if (d && d.multiple) { multi = {codes: list.map((l) => l.code).filter((c) => c !== "auto"), groups: d.groups || [], universal: d.universal || ["en"]}; }
+      else multi = null;
+      renderMulti();
+    }
+    async function refresh(keepVariant) {
+      const my = ++seq, t = (typeof target === "function" ? target() : (target.value || "")), same = (t === lastTarget), keep = same ? picked : null;
+      if (!same) extra = [];
+      lastTarget = t;
+      if (t.startsWith("engine:")) {
+        const id = t.slice(7), q = keepVariant && variant && variant.value ? "?engine=" + encodeURIComponent(variant.value) : "";
+        let d;
+        try { d = await api("GET", "/v1/engines/" + encodeURIComponent(id) + "/languages" + q); } catch (e) { d = null; }
+        if (my !== seq) return;  // a newer choice is already loading
+        if (!d) { fill([{code: "auto", name: "auto"}], "auto", keep); setMulti(null); setNote(""); return; }
+        if (variant && variantWrap) {
+          const vs = d.engines || [];
+          if (vs.length) {
+            if (!keepVariant) variant.innerHTML = vs.map((v) => `<option value="${esc(v.value)}">${esc(v.label)}</option>`).join("");
+            variant.value = String(d.engine);
+            variantWrap.classList.remove("d-none");
+          } else { variantWrap.classList.add("d-none"); variant.innerHTML = ""; }
+        }
+        if (d.fixed) {
+          const reads = (d.reads || []).map((x) => x.name).join(", ");
+          lang.innerHTML = `<option value="auto">${esc(reads ? T("No language setting (reads") + " " + reads + ")" : T("Automatic (detected by the engine)"))}</option>`;
+          lang.value = "auto"; lang.disabled = true; setMulti(null);
+          setNote(d.available === false ? T("This engine is not installed here.")
+            : reads ? T("This engine's models read") + " " + reads + T(". It has no language setting.")
+            : T("This engine detects the language itself."));
+        } else {
+          fill(d.languages, d.default, keep); setMulti(d, d.languages);
+          setNote(d.hint ? T("This engine detects the language itself; a chosen language is sent to the model as a hint (useful for ambiguous scripts).") : "");
+        }
+        return;
+      }
+      if (variantWrap) { variantWrap.classList.add("d-none"); if (variant) variant.innerHTML = ""; }
+      if (!all) { try { all = (await api("GET", "/v1/languages")).languages; } catch (e) { all = [{code: "auto", name: "auto"}]; } }
+      if (my !== seq) return;
+      fill(all, "auto", keep); setMulti({multiple: true, groups: [], universal: ["en"]}, all); setNote("");  // a route: every engine takes what it supports
+    }
+    (cfg.listen || (typeof target === "function" ? null : target))?.addEventListener("change", () => refresh(false));
+    if (variant) variant.addEventListener("change", () => refresh(true));
+    refresh(false);
+    return {
+      refresh,
+      // preselect a saved value ("fr" or "en,fr"): the first goes in the dropdown, the rest become chips
+      set: (value) => { const codes = String(value || "").split(/[,+]/).map((c) => c.trim()).filter(Boolean); if (!codes.length) return;
+        if ([...lang.options].some((o) => o.value === codes[0])) lang.value = codes[0]; picked = codes[0];
+        extra = codes.slice(1); if (multi) renderMulti(); },
+      variantValue: () => (variant && variantWrap && !variantWrap.classList.contains("d-none") ? variant.value : ""),
+      // the chosen languages: one code, or a list when several are selected (an "auto" first language then steps aside)
+      languages: () => { const list = [lang.value, ...extra].filter((c, i, a) => c && a.indexOf(c) === i); const real = list.filter((c) => c !== "auto"); return real.length > 1 ? real : (real[0] || list[0]); },
+    };
+  }
+
+  window.OcrRoute = { api, toast, confirmDo, fmtMs, fmtCents, chart, liveFeed, repaintCharts, languagePicker, modelPicker, $, $$ };
 })();

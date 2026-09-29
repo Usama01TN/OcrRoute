@@ -839,13 +839,15 @@ class Executor(object):
 
     def _engineKwargs(self, cand, req, secret, secrets):
         kw = {}
-        kw.update(cand.provider_options)
-        kw.update(cand.option_overrides)
-        kw.update(req.options)
-        lang = req.language if req.language else ([cand.language] if cand.language else ['en'])
-        kw.setdefault('language', lang if len(lang) > 1 else lang[0])
-        if cand.language and not req.language:
-            kw['language'] = cand.language
+        # An empty option value means "not set": the engine keeps its own default (an explicit `ocrPrompt: ""` would
+        # otherwise replace a vision-language engine's built-in OCR instructions with nothing). Booleans and 0 stay.
+        for layer in (cand.provider_options, cand.option_overrides, req.options):
+            kw.update({k: v for k, v in layer.items() if v is not None and not (isinstance(v, str) and v.strip() == '')})
+        if 'language' not in req.options:
+            value, note = self._languagePlan(cand, req, kw.get('engine'))
+            kw['language'] = value
+            if note:
+                kw['_ocrroute_language_note'] = note
         if cand.endpoint:
             kw['endpoint'] = cand.endpoint
         if cand.model:
@@ -862,6 +864,44 @@ class Executor(object):
         if secrets:
             kw['apiList'] = secrets
         return kw
+
+    def _languagePlan(self, cand, req, variant=None):
+        """
+        Canonical languages for this engine (engines translate them into their own format), and a note when a
+        requested language had to be replaced (Tesseract without Arabic data, OCR.Space engine 1 asked for "auto").
+
+        :return: tuple(str | list[str], str | None)
+        """
+        from engines import languages as L
+
+        requested = L.normalize(req.language)
+        if (not requested or requested == [L.AUTO]) and cand.language:
+            requested = L.normalize(cand.language)  # the provider's default language
+        requested = requested or [L.AUTO]
+        info = self.__m_registry.get(cand.engine_id)
+        cls = None
+        try:
+            cls = info.cls if info is not None else None
+        except Exception:  # noqa: BLE001
+            cls = None
+        if cls is None:
+            return (requested if len(requested) > 1 else requested[0]), None
+        try:
+            supported = cls.getLanguages(variant)
+        except Exception:  # noqa: BLE001 - never fail a request over a language list
+            supported = []
+        if not supported:  # the engine takes no language setting (it detects the language itself)
+            return (requested if len(requested) > 1 else requested[0]), None
+        usable = [c for c in requested if c in supported]
+        dropped = [c for c in requested if c not in supported]
+        if not usable:
+            usable = [cls.defaultLanguage(variant)]
+        note = None
+        if dropped:
+            what = ', '.join('automatic detection' if c == L.AUTO else L.name(c) for c in dropped)
+            hint = ' (install its traineddata to use it)' if cand.engine_id == 'Tesseract' and L.AUTO not in dropped else ''
+            note = '{}: {} not available{} -> used {}'.format(cand.engine_id, what, hint, ', '.join(L.name(c) for c in usable))
+        return (usable if len(usable) > 1 else usable[0]), note
 
     def _loadCredentials(self, cand):
         if not cand.credential_ids:
@@ -899,6 +939,7 @@ class Executor(object):
         cred_cycle = creds or [('', '')]
         last_code, last_msg = '', ''
         for ci, (cred_id, secret) in enumerate(cred_cycle):
+            exhaustedNow = None
             t0 = time.time()
             att = {
                 'order': order,
@@ -913,6 +954,9 @@ class Executor(object):
                 if remaining <= 0:
                     raise TimeoutError('deadline')
                 result = self._runEngine(cand, req, pages, transform, secret, [s for _, s in creds], remaining)
+                languageNote = result.pop('_language_note', None)
+                if languageNote and languageNote not in trace.explain:
+                    trace.explain.append(languageNote)
                 code = '' if result.get('FileParseExitCode') != -1 else classify(result.get('ErrorMessage', '')).code
                 if not code and not result.get('ParsedText', '').strip() and not result['TextOverlay']['Lines']:
                     code = EMPTY_RESULT
@@ -987,6 +1031,7 @@ class Executor(object):
                             if last_code in (AUTH, QUOTA, RATE_LIMIT):
                                 from datetime import datetime, timedelta, timezone
 
+                                exhaustedNow = cred_id
                                 c.exhausted_until = (
                                     (
                                         datetime.now(timezone.utc)
@@ -1001,6 +1046,11 @@ class Executor(object):
                 return result, '', ''
             if last_code in TERMINAL:
                 return None, last_code, last_msg
+            if exhaustedNow:  # the session above is committed: tell the cluster (a member polls the primary at once)
+                from ocrroute.sync import notifyExhausted
+
+                notifyExhausted(exhaustedNow)
+                exhaustedNow = None
             if last_code in (AUTH, QUOTA, RATE_LIMIT) and ci < len(cred_cycle) - 1:
                 trace.explain.append(
                     '{}: credential …{} {} → rotating key'.format(cand.engine_id, cred_id[-4:], last_code)
@@ -1015,6 +1065,7 @@ class Executor(object):
 
     def _runEngine(self, cand, req, pages, transform, secret, secrets, budget_s):
         kwargs = self._engineKwargs(cand, req, secret, secrets)
+        languageNote = kwargs.pop('_ocrroute_language_note', None)
         results = []
         per_page = max(1.0, budget_s / max(1, len(pages)))
         for page in pages:
@@ -1029,7 +1080,10 @@ class Executor(object):
                 return res
             results.append(transform.restore(res))
         indices = req.page_indices or list(range(len(pages)))
-        return postprocess.stitchPages(results, indices)
+        stitched = postprocess.stitchPages(results, indices)
+        if languageNote:
+            stitched['_language_note'] = languageNote
+        return stitched
 
     def _invoke(self, engine_id, image, kwargs):
         obj = self.__m_registry.instantiate(engine_id, image=image, **kwargs)

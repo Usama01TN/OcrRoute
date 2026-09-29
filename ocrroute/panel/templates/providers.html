@@ -18,8 +18,9 @@
 <form id="prov-form">
 <div class="row-fields"><div class="field"><label>{{ _('Engine') }}</label><select name="engine_id" id="engine-sel" required>{% for e in engines %}<option value="{{ e.id }}" {% if not e.available %}disabled{% endif %}>{{ e.name }} ({{ e.kind }}){% if not e.available %} - {{ _('unavailable') }}{% endif %}</option>{% endfor %}</select></div>
 <div class="field"><label>{{ _('Label') }}</label><input name="label" required placeholder="e.g. ocrspace-main"></div></div>
-<div class="row-fields"><div class="field"><label>{{ _('Custom endpoint') }} <span class="text-muted">({{ _('any OpenAI-compatible base URL you operate, or engine default') }})</span></label><input name="endpoint" placeholder="{{ _('leave empty for the engine default') }}"></div><div class="field"><label>{{ _('Model') }}</label><input name="model"></div></div>
-<div class="row-fields"><div class="field"><label>{{ _('Language') }}</label><input name="language" placeholder="en"></div><div class="field"><label>{{ _('Timeout (s)') }}</label><input name="timeout" type="number" value="60"></div><div class="field"><label>{{ _('Retries') }}</label><input name="retries" type="number" value="2"></div><div class="field"><label>{{ _('Priority') }}</label><input name="priority" type="number" value="100"></div><div class="field"><label>{{ _('Weight') }}</label><input name="weight" type="number" value="1"></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Custom endpoint') }} <span class="text-muted">({{ _('optional: a proxy or self-hosted server instead of the engine\'s default URL') }})</span></label><input name="endpoint" placeholder="{{ _('leave empty for the engine default') }}"></div>
+<div class="field"><label>{{ _('Default language') }} <span class="text-muted">({{ _('used when a request sends none or "auto"') }})</span></label><select id="prov-lang" class="form-select form-select-sm"><option value="auto">auto</option></select><input type="hidden" name="language"><div class="form-text d-none" id="prov-lang-note"></div></div></div>
+<div class="row-fields"><div class="field"><label>{{ _('Timeout (s)') }}</label><input name="timeout" type="number" value="60"></div><div class="field"><label>{{ _('Retries') }}</label><input name="retries" type="number" value="2"></div><div class="field"><label>{{ _('Priority') }}</label><input name="priority" type="number" value="100"></div><div class="field"><label>{{ _('Weight') }}</label><input name="weight" type="number" value="1"></div></div>
 <div class="row-fields"><div class="field"><label>RPM</label><input name="rpm_limit" type="number" value="0"></div><div class="field"><label>RPD</label><input name="rpd_limit" type="number" value="0"></div><div class="field"><label>{{ _('Concurrency') }}</label><input name="concurrency_limit" type="number" value="4"></div><div class="field"><label>{{ _('Budget ¢/month') }}</label><input name="monthly_budget_cents" type="number" step="0.01" value="0"></div></div>
 <h3 class="small text-muted text-uppercase fw-bold mt-2">{{ _('Engine options') }}</h3><div id="opt-form" class="opt-grid"></div>
 <div class="field mt-2"><label>{{ _('Options JSON') }}</label><textarea name="options_json" placeholder="{}"></textarea></div>
@@ -42,15 +43,37 @@ document.addEventListener("DOMContentLoaded", () => {
       const wrap = document.createElement("div"); wrap.className = "field";
       const v = values[o.name] ?? o.default ?? "";
       let input = o.type === "boolean" ? `<select data-opt="${o.name}" data-type="boolean"><option value="">(default)</option><option value="true" ${v===true?"selected":""}>true</option><option value="false" ${v===false?"selected":""}>false</option></select>` : `<input data-opt="${o.name}" data-type="${o.type}" value="${v === null ? "" : v}" placeholder="${o.default ?? ""}">`;
+      if (o.name === "model") {  // known models as suggestions + a live refresh from this provider's account
+        input = `<div class="input-group input-group-sm"><input data-opt="model" data-type="string" list="dl-model" autocomplete="off" class="form-control" value="${String(v ?? "").replace(/"/g, "&quot;")}" placeholder="${T("engine default")}"><datalist id="dl-model"></datalist><button class="btn btn-outline-secondary" type="button" id="model-refresh" title="${T("Refresh asks the provider for its current models.")}"><i class="bi bi-arrow-repeat"></i></button></div><div class="form-text" id="model-note"></div>`;
+      } else if (o.name === "prompt" || o.name === "ocrPrompt") {
+        input = `<textarea data-opt="${o.name}" data-type="string" rows="3" class="form-control form-control-sm" placeholder="${o.name === "prompt" ? T("Extra instructions appended to the built-in OCR prompt") : ""}">${String(v ?? "").replace(/</g, "&lt;")}</textarea>`;
+      }
       wrap.innerHTML = `<label title="${o.description || ""}"><code>${o.name}</code> <span class="muted">${o.type}</span></label>${input}`;
       optForm.appendChild(wrap);
+      if (o.name === "model") loadModels(engine, false);
     });
   }
+  const T = (k) => (window.I18N && window.I18N[k]) || k;
+  async function loadModels(engine, live) {
+    const dl = $("#dl-model"), note = $("#model-note"); if (!dl) return;
+    let q = live && editing ? "?live=1&provider_id=" + encodeURIComponent(editing.id) : "";
+    try {
+      const d = await api("GET", "/v1/engines/" + encodeURIComponent(engine) + "/models" + q);
+      dl.innerHTML = (d.models || []).map(m => `<option value="${m.id}"></option>`).join("");
+      const inp = optForm.querySelector('[data-opt="model"]'); if (inp) inp.placeholder = d.default || "";
+      note.textContent = live ? (d.source === "live" ? T("Live list from the provider") + " (" + d.models.length + ")" : (d.error || "")) : (T("Default:") + " " + (d.default || "-") + (editing ? ". " + T("Refresh asks the provider for its current models.") : ""));
+      note.className = "form-text " + (live && d.error && d.source !== "live" ? "text-danger" : "text-muted");
+    } catch (e) { note.textContent = e.message; }
+  }
+  optForm.addEventListener("click", (e) => { if (e.target.closest("#model-refresh")) loadModels(form.elements.engine_id.value, true); });
+  const provLang = OcrRoute.languagePicker({target: () => "engine:" + (form.elements.engine_id.value || ""), listen: $("#engine-sel"), lang: $("#prov-lang"), note: $("#prov-lang-note")});
   $("#engine-sel").onchange = e => buildOptions(e.target.value);
   function open(p) {
     editing = p; form.reset(); $("#prov-title").textContent = p ? `Edit ${p.label}` : "New provider";
-    if (p) { for (const k of Object.keys(p)) { const el = form.elements[k]; if (el && typeof p[k] !== "object") el.value = p[k]; } form.elements.engine_id.disabled = true; form.elements.options_json.value = JSON.stringify(p.options || {}); form.elements.proxy_json.value = JSON.stringify(p.proxy || {}); buildOptions(p.engine_id, p.options || {}); }
-    else { form.elements.engine_id.disabled = false; const hash = new URLSearchParams(location.hash.slice(1)).get("new"); if (hash) form.elements.engine_id.value = hash; buildOptions(form.elements.engine_id.value); }
+    if (p) { for (const k of Object.keys(p)) { const el = form.elements[k]; if (el && typeof p[k] !== "object") el.value = p[k]; } form.elements.engine_id.disabled = true; form.elements.options_json.value = JSON.stringify(p.options || {}); form.elements.proxy_json.value = JSON.stringify(p.proxy || {});
+      const opts = Object.assign({}, p.options || {}); if (!opts.model && p.model) opts.model = p.model; buildOptions(p.engine_id, opts);  // one model field
+      provLang.refresh(false).then(() => provLang.set(p.language || "")); }
+    else { form.elements.engine_id.disabled = false; const hash = new URLSearchParams(location.hash.slice(1)).get("new"); if (hash) form.elements.engine_id.value = hash; buildOptions(form.elements.engine_id.value); provLang.refresh(false); }
     dlg.showModal();
   }
   $("#new-provider").onclick = () => open(null);
@@ -65,6 +88,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let options = {}; try { options = JSON.parse(fd.get("options_json") || "{}"); body.proxy = JSON.parse(fd.get("proxy_json") || "{}"); } catch { return toast("Options/proxy must be valid JSON", true); }
     optForm.querySelectorAll("[data-opt]").forEach(el => { const v = el.value; if (v === "") return; const t = el.dataset.type; options[el.dataset.opt] = t === "boolean" ? v === "true" : t === "integer" ? parseInt(v) : t === "number" ? parseFloat(v) : v; });
     body.options = options;
+    body.model = options.model || "";  // one model: the engine option (the provider's model column follows it)
+    const langs = provLang.languages(); body.language = Array.isArray(langs) ? langs.join(",") : (langs === "auto" ? "" : langs);
     try { if (editing) { delete body.engine_id; await api("PATCH", `/v1/providers/${editing.id}`, body); } else await api("POST", "/v1/providers", body); location.reload(); } catch (err) { toast(err.message, true); }
   };
   document.querySelectorAll(".del").forEach(b => b.onclick = async () => { if (!confirmDo("Delete this provider and its credentials?")) return; try { await api("DELETE", `/v1/providers/${b.dataset.id}`); location.reload(); } catch (e) { toast(e.message, true); } });

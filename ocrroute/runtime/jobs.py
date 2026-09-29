@@ -112,7 +112,8 @@ class JobRunner(object):
                 engine=opts.get('engine', ''),
                 language=list(opts.get('language') or ['en']),
                 output=list(opts.get('output') or ['json']),
-                options=dict(opts.get('options') or {}),
+                options={k: x for k, x in dict(opts.get('options') or {}).items() if k != '_prompt'},
+                prompt=str((opts.get('options') or {}).get('_prompt') or ''),
                 origin='batch',
                 metadata={'job_id': job_id},
             )
