@@ -109,7 +109,7 @@ OcrRoute is free and open source. If it saves you time or money, you can support
 [![Support on Ko-fi](https://img.shields.io/badge/Support-Ko--fi-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/usamatn)
 
 - **ba9chich:** https://ba9chich.com/fr/IninouUsama
-- **Ko-fi:** (international, card or PayPal): https://ko-fi.com/usamatn
+- **Ko-fi:** https://ko-fi.com/usamatn
 
 Stars, bug reports and pull requests help too. Thank you!
 
