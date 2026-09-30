@@ -9,6 +9,8 @@ OCR, …) in a FastAPI gateway with a web control panel, a desktop app (ManyQt: 
 a single SQLite file.
 
 ```
+pip install "ocrroute[local,desktop]"   # from PyPI: core + Tesseract/OpenCV extras + the desktop app
+# or, from a clone:
 pip install -e ".[local,desktop,dev]"   # core + Tesseract/OpenCV extras + ManyQt + PyQt5 + tests
 ocrroute setup                          # admin user, first provider, default route, API key
 ocrroute serve                          # API  http://127.0.0.1:20256/v1/docs
