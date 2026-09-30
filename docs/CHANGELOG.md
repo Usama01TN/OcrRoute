@@ -2,6 +2,26 @@
 
 ## 0.8.0 - 2026-09-28
 
+### In short
+
+- **Languages**: one vocabulary for every engine (`auto` or ISO codes); each engine translates to its own format.
+  Every engine answers the picker (list, prompt hint, or fixed script); several languages at once where supported,
+  with EasyOCR's combination rules. Baidu publishes 25 languages; RapidOCR picks its model by language.
+- **Models and prompts**: a model picker for the 33 engines that take one (known models, live list from the
+  provider's account, any id accepted); the extra prompt shown only where it applies; Batch carries both.
+  Providers form: each setting once.
+- **Cluster**: credential status shared across servers (a key over quota on one server is skipped everywhere).
+- **Fixes**: real engine names in the catalog; images reach every cloud engine as real PNG/JPEG (OCR.Space engine 3
+  returned no text for GIF input) and OCR.Space shrinks uploads over the plan's limit; empty option values keep
+  engine defaults; Baidu kept the requested language; TensorFlow start-up noise silenced; macOS sync stalls fixed.
+
+### Details
+
+- **Packaging for PyPI**: `pip install ocrroute` (the wheel carries the AioOCR engine library, templates, translations
+  and fonts; verified from a clean environment: 56 engines, server and panel run). PEP 639 license metadata, project
+  URLs, classifiers, absolute README links. `publish.yml` uploads to PyPI on each GitHub release with trusted
+  publishing (`docs/PUBLISHING.md`).
+
 - **Fix: OCR.Space engine 3 returned no text ("Overlay requested but no regions were detected") for a GIF unless a
   preprocessing option was ticked.** Cause: for in-memory input, `imageBytes()` returned the original bytes and 21
   cloud engines labelled them `image/png`; a GIF (or WebP, BMP, TIFF) thus reached the API mislabelled. Engines 1 and

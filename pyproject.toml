@@ -1,21 +1,33 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ocrroute"
 version = "0.8.0"
-description = "OcrRoute: an OCR gateway for multi-engine text extraction with routing, fallbacks, a control panel and a PyQt5 desktop app."
+description = "OCR gateway: one API in front of 56 OCR engines (Tesseract, PaddleOCR, EasyOCR, Surya, Mistral OCR, Google Vision, OCR.Space, Claude/GPT/Gemini and other vision models) with routing, automatic fallback, a web dashboard, a desktop app and multi-server clusters."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
-authors = [{ name = "OcrRoute contributors" }]
-keywords = ["ocr", "gateway", "routing", "fastapi", "pyqt5", "sqlite"]
+authors = [{ name = "Usama (Usama01TN)" }]
+maintainers = [{ name = "Usama (Usama01TN)" }]
+keywords = ["ocr", "gateway", "routing", "fallback", "fastapi", "tesseract", "paddleocr", "easyocr", "vision-language-model", "self-hosted"]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
   "Framework :: FastAPI",
   "Topic :: Scientific/Engineering :: Image Recognition",
+  "Topic :: Text Processing",
+  "Environment :: Web Environment",
 ]
+
 dependencies = [
   "fastapi>=0.110", "uvicorn[standard]>=0.27", "pydantic>=2.5", "pydantic-settings>=2.1",
   "sqlalchemy>=2.0", "alembic>=1.13", "typer>=0.9", "rich>=13", "structlog>=24",
@@ -50,6 +62,15 @@ dev = ["pytest>=8", "pytest-cov", "respx>=0.20", "ruff", "black", "mypy", "types
 
 [project.scripts]
 ocrroute = "ocrroute.cli.main:app"
+[project.urls]
+Homepage = "https://github.com/Usama01TN/OcrRoute"
+Repository = "https://github.com/Usama01TN/OcrRoute"
+Documentation = "https://github.com/Usama01TN/OcrRoute/tree/main/docs"
+Changelog = "https://github.com/Usama01TN/OcrRoute/blob/main/docs/CHANGELOG.md"
+Issues = "https://github.com/Usama01TN/OcrRoute/issues"
+Releases = "https://github.com/Usama01TN/OcrRoute/releases"
+Funding = "https://ko-fi.com/usamatn"
+
 
 [tool.setuptools.packages.find]
 include = ["ocrroute*", "AioOCR*"]
